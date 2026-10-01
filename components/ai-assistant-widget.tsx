@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useRef, useEffect } from 'react'
+import { usePathname } from 'next/navigation'
 import { Sparkles, MessageSquare, X, Send, Bot, User, Trash2, ArrowUpRight, HelpCircle } from 'lucide-react'
 import Link from 'next/link'
 
@@ -28,11 +29,17 @@ const QUICK_SUGGESTIONS = [
 ]
 
 export default function AiAssistantWidget() {
+  const pathname = usePathname()
   const [isOpen, setIsOpen] = useState(false)
   const [messages, setMessages] = useState<Message[]>(INITIAL_MESSAGES)
   const [input, setInput] = useState('')
   const [loading, setLoading] = useState(false)
   const messagesEndRef = useRef<HTMLDivElement>(null)
+
+  // Do not render floating widget on public display kiosk board
+  if (pathname === '/display' || pathname?.startsWith('/display')) {
+    return null
+  }
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })

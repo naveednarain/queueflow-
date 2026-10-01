@@ -36,11 +36,20 @@ export default function DisplayClient({ initialCounters, initialNextUp }: Props)
   const [currentDate, setCurrentDate] = useState<string>('')
   const [soundEnabled, setSoundEnabled] = useState<boolean>(true)
   const [voiceEnabled, setVoiceEnabled] = useState<boolean>(true)
-  const [isDarkMode, setIsDarkMode] = useState<boolean>(false) // Default to LIGHT to match rest of UI
+  const [isDarkMode, setIsDarkMode] = useState<boolean>(false)
   const [isFullscreen, setIsFullscreen] = useState<boolean>(false)
   const [isRefreshing, setIsRefreshing] = useState<boolean>(false)
   const [flashingCounterId, setFlashingCounterId] = useState<string | null>(null)
+  
   const prevTokensRef = useRef<Record<string, string | null>>({})
+  const soundEnabledRef = useRef(soundEnabled)
+  const voiceEnabledRef = useRef(voiceEnabled)
+  const audioCtxRef = useRef<AudioContext | null>(null)
+  const refreshTimeoutRef = useRef<NodeJS.Timeout | null>(null)
+  const isFetchingRef = useRef(false)
+
+  soundEnabledRef.current = soundEnabled
+  voiceEnabledRef.current = voiceEnabled
 
   // Initialize previous tokens map
   useEffect(() => {
@@ -51,48 +60,57 @@ export default function DisplayClient({ initialCounters, initialNextUp }: Props)
     prevTokensRef.current = map
   }, [initialCounters])
 
-  // ── Web Audio Chime (Airport-style 2-tone melodic chime) ───────
+  // ── Web Audio Chime (Airport-style 2-tone melodic chime - Singleton Context) ──
   const playAirportChime = useCallback(() => {
-    if (!soundEnabled) return
+    if (!soundEnabledRef.current || typeof window === 'undefined') return
     try {
-      const AudioCtx =
-        window.AudioContext ||
-        (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext
-      if (!AudioCtx) return
-      const ctx = new AudioCtx()
+      if (!audioCtxRef.current) {
+        const AudioCtx =
+          window.AudioContext ||
+          (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext
+        if (AudioCtx) {
+          audioCtxRef.current = new AudioCtx()
+        }
+      }
+      const ctx = audioCtxRef.current
+      if (!ctx) return
+
+      if (ctx.state === 'suspended') {
+        ctx.resume().catch(() => {})
+      }
 
       // Tone 1: F5 (698.46 Hz)
       const osc1 = ctx.createOscillator()
       const gain1 = ctx.createGain()
       osc1.type = 'sine'
       osc1.frequency.setValueAtTime(698.46, ctx.currentTime)
-      gain1.gain.setValueAtTime(0.28, ctx.currentTime)
-      gain1.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.45)
+      gain1.gain.setValueAtTime(0.25, ctx.currentTime)
+      gain1.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.4)
       osc1.connect(gain1)
       gain1.connect(ctx.destination)
       osc1.start(ctx.currentTime)
-      osc1.stop(ctx.currentTime + 0.45)
+      osc1.stop(ctx.currentTime + 0.4)
 
-      // Tone 2: A5 (880 Hz) - crisp harmonic
+      // Tone 2: A5 (880 Hz)
       const osc2 = ctx.createOscillator()
       const gain2 = ctx.createGain()
       osc2.type = 'sine'
-      osc2.frequency.setValueAtTime(880, ctx.currentTime + 0.2)
-      gain2.gain.setValueAtTime(0.32, ctx.currentTime + 0.2)
-      gain2.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.9)
+      osc2.frequency.setValueAtTime(880, ctx.currentTime + 0.18)
+      gain2.gain.setValueAtTime(0.28, ctx.currentTime + 0.18)
+      gain2.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.8)
       osc2.connect(gain2)
       gain2.connect(ctx.destination)
-      osc2.start(ctx.currentTime + 0.2)
-      osc2.stop(ctx.currentTime + 0.9)
+      osc2.start(ctx.currentTime + 0.18)
+      osc2.stop(ctx.currentTime + 0.8)
     } catch {
-      // Audio context might be waiting for user gesture
+      // Audio context might be waiting for user gesture on strict browsers
     }
-  }, [soundEnabled])
+  }, [])
 
   // ── Speech Synthesis Voice Announcement ────────────────────────
   const speakTokenAnnouncement = useCallback(
     (tokenNumber: string, counterName: string) => {
-      if (!voiceEnabled || typeof window === 'undefined' || !('speechSynthesis' in window)) return
+      if (!voiceEnabledRef.current || typeof window === 'undefined' || !('speechSynthesis' in window)) return
       try {
         window.speechSynthesis.cancel()
         const spacedToken = tokenNumber.split('').join(' ')
@@ -105,10 +123,10 @@ export default function DisplayClient({ initialCounters, initialNextUp }: Props)
         // Ignore speech synthesis errors
       }
     },
-    [voiceEnabled]
+    []
   )
 
-  // ── Live Clock & Date ─────────────────────────────────────────
+  // ── Live Clock & Date (Optimized) ─────────────────────────────
   useEffect(() => {
     const updateTime = () => {
       const now = new Date()
@@ -116,7 +134,7 @@ export default function DisplayClient({ initialCounters, initialNextUp }: Props)
         now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: true })
       )
       setCurrentDate(
-        now.toLocaleDateString([], { weekday: 'long', month: 'short', day: 'numeric', year: 'numeric' })
+        now.toLocaleDateString([], { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' })
       )
     }
     updateTime()
@@ -126,8 +144,11 @@ export default function DisplayClient({ initialCounters, initialNextUp }: Props)
 
   // ── Refresh Board Data ────────────────────────────────────────
   const refreshBoard = useCallback(async () => {
+    if (isFetchingRef.current) return
+    isFetchingRef.current = true
+    setIsRefreshing(true)
+
     try {
-      setIsRefreshing(true)
       const data = await getDisplayData()
       setCounters(data.counters)
       setNextUp(data.nextUp)
@@ -144,48 +165,54 @@ export default function DisplayClient({ initialCounters, initialNextUp }: Props)
           setFlashingCounterId(c.counter_id)
           setTimeout(() => {
             speakTokenAnnouncement(c.token_number!, c.counter_name)
-          }, 600)
-          setTimeout(() => setFlashingCounterId(null), 8500)
+          }, 500)
+          setTimeout(() => setFlashingCounterId(null), 8000)
         }
         prevTokensRef.current[c.counter_id] = c.token_number
       }
     } catch (err) {
       console.error('Display refresh failed:', err)
     } finally {
-      setTimeout(() => setIsRefreshing(false), 400)
+      isFetchingRef.current = false
+      setTimeout(() => setIsRefreshing(false), 300)
     }
   }, [playAirportChime, speakTokenAnnouncement])
 
-  // ── Realtime Subscription ─────────────────────────────────────
+  // ── Debounced Trigger for Realtime Events ──────────────────────
+  const debouncedRefresh = useCallback(() => {
+    if (refreshTimeoutRef.current) clearTimeout(refreshTimeoutRef.current)
+    refreshTimeoutRef.current = setTimeout(() => {
+      refreshBoard()
+    }, 400)
+  }, [refreshBoard])
+
+  // ── Realtime Subscription (Stable, does not re-subscribe on state change) ─
   useEffect(() => {
     const supabase = createClient()
 
     const channel = supabase
       .channel('display-board-realtime')
-      .on(
-        'postgres_changes',
-        { event: '*', schema: 'public', table: 'tokens' },
-        () => {
-          refreshBoard()
-        }
-      )
-      .on(
-        'postgres_changes',
-        { event: '*', schema: 'public', table: 'counters' },
-        () => {
-          refreshBoard()
-        }
-      )
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'tokens' }, () => {
+        debouncedRefresh()
+      })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'counters' }, () => {
+        debouncedRefresh()
+      })
       .subscribe()
 
-    // Backup polling every 8s
-    const pollInterval = setInterval(refreshBoard, 8000)
+    // Backup polling every 12s, only when page is visible
+    const pollInterval = setInterval(() => {
+      if (typeof document !== 'undefined' && document.visibilityState === 'visible') {
+        debouncedRefresh()
+      }
+    }, 12000)
 
     return () => {
       supabase.removeChannel(channel)
       clearInterval(pollInterval)
+      if (refreshTimeoutRef.current) clearTimeout(refreshTimeoutRef.current)
     }
-  }, [refreshBoard])
+  }, [debouncedRefresh])
 
   // ── Fullscreen Toggle ─────────────────────────────────────────
   const toggleFullscreen = () => {
@@ -210,38 +237,22 @@ export default function DisplayClient({ initialCounters, initialNextUp }: Props)
 
   return (
     <div
-      className={`min-h-screen flex flex-col font-sans select-none overflow-x-hidden transition-colors duration-300 ${
+      className={`min-h-[100dvh] flex flex-col font-sans select-none overflow-x-hidden transition-colors duration-200 ${
         isDarkMode
           ? 'bg-[#030712] text-white selection:bg-emerald-500 selection:text-black'
-          : 'bg-[#F5F5F5] text-gray-900 selection:bg-[#22C55E] selection:text-white'
+          : 'bg-[#F9FAFB] text-gray-900 selection:bg-[#22C55E] selection:text-white'
       }`}
     >
-      {/* ── Background Patterns ───────────────────────────────────── */}
-      {isDarkMode ? (
-        <>
-          <div className="absolute top-0 left-1/4 w-96 h-96 bg-emerald-500/10 rounded-full blur-[128px] pointer-events-none -z-10" />
-          <div className="absolute top-1/3 right-1/4 w-96 h-96 bg-cyan-500/10 rounded-full blur-[140px] pointer-events-none -z-10" />
-          <div
-            className="absolute inset-0 pointer-events-none opacity-[0.035] -z-10"
-            style={{
-              backgroundImage: 'radial-gradient(rgba(255, 255, 255, 0.4) 1px, transparent 1px)',
-              backgroundSize: '24px 24px',
-            }}
-          />
-        </>
-      ) : (
-        <>
-          <div className="absolute top-0 left-1/4 w-96 h-96 bg-[#22C55E]/5 rounded-full blur-[128px] pointer-events-none -z-10" />
-          <div className="absolute top-1/3 right-1/4 w-96 h-96 bg-blue-500/5 rounded-full blur-[140px] pointer-events-none -z-10" />
-          <div
-            className="absolute inset-0 pointer-events-none opacity-[0.03] -z-10"
-            style={{
-              backgroundImage: 'radial-gradient(rgba(0, 0, 0, 0.5) 1px, transparent 1px)',
-              backgroundSize: '24px 24px',
-            }}
-          />
-        </>
-      )}
+      {/* ── High-Performance Background (No laggy GPU blurs) ─────── */}
+      <div
+        className="fixed inset-0 pointer-events-none opacity-[0.025] -z-10"
+        style={{
+          backgroundImage: isDarkMode
+            ? 'radial-gradient(rgba(255, 255, 255, 0.4) 1px, transparent 1px)'
+            : 'radial-gradient(rgba(0, 0, 0, 0.5) 1px, transparent 1px)',
+          backgroundSize: '24px 24px',
+        }}
+      />
 
       {/* ── Top Header Bar ─────────────────────────────────────────── */}
       <header

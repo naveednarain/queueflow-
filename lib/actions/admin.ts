@@ -149,16 +149,19 @@ export async function getAdminData(): Promise<AdminData> {
   }))
 
   // Map services
-  const formattedServs: AdminServiceItem[] = (servs ?? []).map((s: any) => ({
-    id: s.id,
-    department_id: s.department_id,
-    department_name: s.departments?.name ?? 'Unknown',
-    name: s.name,
-    prefix: s.prefix,
-    avg_duration: s.avg_duration,
-    priority_level: s.priority_level,
-    active: s.active,
-  }))
+  const formattedServs: AdminServiceItem[] = (servs ?? []).map((s: any) => {
+    const dept = Array.isArray(s.departments) ? s.departments[0] : s.departments
+    return {
+      id: s.id,
+      department_id: s.department_id,
+      department_name: dept?.name ?? 'General',
+      name: s.name,
+      prefix: s.prefix,
+      avg_duration: s.avg_duration,
+      priority_level: s.priority_level,
+      active: s.active,
+    }
+  })
 
   // Map rules (ensure all departments have rule representation)
   const rulesMap = new Map<string, any>()
@@ -180,16 +183,19 @@ export async function getAdminData(): Promise<AdminData> {
   })
 
   // Map activity logs
-  const formattedLogs: AdminActivityLogItem[] = (logs ?? []).map((l: any) => ({
-    id: l.id,
-    actor: l.actor,
-    actor_name: l.profiles?.name || 'System / Automated',
-    actor_email: l.profiles?.email || 'system@queueflow.internal',
-    action: l.action,
-    entity: l.entity,
-    entity_id: l.entity_id,
-    created_at: l.created_at,
-  }))
+  const formattedLogs: AdminActivityLogItem[] = (logs ?? []).map((l: any) => {
+    const prof = Array.isArray(l.profiles) ? l.profiles[0] : l.profiles
+    return {
+      id: l.id,
+      actor: l.actor,
+      actor_name: prof?.name || 'System / Automated',
+      actor_email: prof?.email || 'system@queueflow.internal',
+      action: l.action,
+      entity: l.entity,
+      entity_id: l.entity_id,
+      created_at: l.created_at,
+    }
+  })
 
   return {
     users: (users ?? []) as AdminUserItem[],

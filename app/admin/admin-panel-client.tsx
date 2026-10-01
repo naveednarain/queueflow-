@@ -20,6 +20,8 @@ import {
   Bell,
   Clock,
   Sparkles,
+  Activity,
+  Phone,
 } from 'lucide-react'
 import { toast } from 'sonner'
 import BackButton from '@/components/back-button'
@@ -389,19 +391,48 @@ export default function AdminPanelClient({ initialData, adminEmail }: Props) {
     }
   }
 
-  // Filters
-  const filteredUsers = data.users.filter(
-    (u) =>
-      u.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      u.email.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      u.role.toLowerCase().includes(searchQuery.toLowerCase())
+  // Time formatting helper
+  const formatTimeString = (timeStr?: string) => {
+    if (!timeStr) return '--:--'
+    const parts = timeStr.split(':')
+    if (parts.length < 2) return timeStr
+    let hour = parseInt(parts[0], 10)
+    const minute = parts[1]
+    const ampm = hour >= 12 ? 'PM' : 'AM'
+    hour = hour % 12 || 12
+    return `${hour}:${minute} ${ampm}`
+  }
+
+  // Filters with null-safety
+  const q = searchQuery.toLowerCase().trim()
+
+  const filteredDepts = data.departments.filter((d) =>
+    (d.name || '').toLowerCase().includes(q)
   )
 
-  const filteredLogs = data.logs.filter(
-    (l) =>
-      l.action.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      l.actor_name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      (l.entity && l.entity.toLowerCase().includes(searchQuery.toLowerCase()))
+  const filteredUsers = data.users.filter((u) =>
+    (u.name || '').toLowerCase().includes(q) ||
+    (u.email || '').toLowerCase().includes(q) ||
+    (u.role || '').toLowerCase().includes(q) ||
+    (u.account_status || '').toLowerCase().includes(q) ||
+    (u.phone || '').toLowerCase().includes(q)
+  )
+
+  const filteredServices = data.services.filter((s) =>
+    (s.name || '').toLowerCase().includes(q) ||
+    (s.department_name || '').toLowerCase().includes(q) ||
+    (s.prefix || '').toLowerCase().includes(q)
+  )
+
+  const filteredRules = data.rules.filter((r) =>
+    (r.department_name || '').toLowerCase().includes(q)
+  )
+
+  const filteredLogs = data.logs.filter((l) =>
+    (l.action || '').toLowerCase().includes(q) ||
+    (l.actor_name || '').toLowerCase().includes(q) ||
+    (l.actor_email || '').toLowerCase().includes(q) ||
+    (l.entity && l.entity.toLowerCase().includes(q))
   )
 
   return (
@@ -438,6 +469,61 @@ export default function AdminPanelClient({ initialData, adminEmail }: Props) {
               <RotateCw className={`w-3.5 h-3.5 ${runningMaintenance ? 'animate-spin' : ''}`} />
               <span>{runningMaintenance ? 'Running...' : 'Run Reminders & Cleanup'}</span>
             </button>
+          </div>
+        </div>
+
+        {/* ── High-Level KPI Summary Cards ────────────────────────── */}
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 mt-6">
+          <div className="bg-gradient-to-br from-emerald-50/70 to-white p-4 rounded-2xl border border-emerald-100 shadow-2xs">
+            <div className="flex items-center justify-between">
+              <span className="text-[11px] font-bold text-emerald-800 uppercase tracking-wider">Departments</span>
+              <div className="w-8 h-8 rounded-xl bg-emerald-100 text-emerald-700 flex items-center justify-center">
+                <Building2 className="w-4 h-4" />
+              </div>
+            </div>
+            <div className="text-2xl font-black text-gray-900 mt-2">{data.departments.length}</div>
+            <div className="text-[11px] text-gray-500 mt-0.5 font-medium">
+              {data.departments.reduce((acc, d) => acc + (d.counters_count || 0), 0)} service counters configured
+            </div>
+          </div>
+
+          <div className="bg-gradient-to-br from-blue-50/70 to-white p-4 rounded-2xl border border-blue-100 shadow-2xs">
+            <div className="flex items-center justify-between">
+              <span className="text-[11px] font-bold text-blue-800 uppercase tracking-wider">Services</span>
+              <div className="w-8 h-8 rounded-xl bg-blue-100 text-blue-700 flex items-center justify-center">
+                <Layers className="w-4 h-4" />
+              </div>
+            </div>
+            <div className="text-2xl font-black text-gray-900 mt-2">{data.services.length}</div>
+            <div className="text-[11px] text-gray-500 mt-0.5 font-medium">
+              {data.services.filter((s) => s.active).length} Active · {data.services.filter((s) => !s.active).length} Inactive
+            </div>
+          </div>
+
+          <div className="bg-gradient-to-br from-purple-50/70 to-white p-4 rounded-2xl border border-purple-100 shadow-2xs">
+            <div className="flex items-center justify-between">
+              <span className="text-[11px] font-bold text-purple-800 uppercase tracking-wider">Users & Roles</span>
+              <div className="w-8 h-8 rounded-xl bg-purple-100 text-purple-700 flex items-center justify-center">
+                <Users className="w-4 h-4" />
+              </div>
+            </div>
+            <div className="text-2xl font-black text-gray-900 mt-2">{data.users.length}</div>
+            <div className="text-[11px] text-gray-500 mt-0.5 font-medium">
+              {data.users.filter((u) => u.role === 'admin').length} Admin · {data.users.filter((u) => u.role === 'staff' || u.role === 'manager').length} Staff · {data.users.filter((u) => u.role === 'customer').length} Customer
+            </div>
+          </div>
+
+          <div className="bg-gradient-to-br from-rose-50/70 to-white p-4 rounded-2xl border border-rose-100 shadow-2xs">
+            <div className="flex items-center justify-between">
+              <span className="text-[11px] font-bold text-rose-800 uppercase tracking-wider">Audit Trail</span>
+              <div className="w-8 h-8 rounded-xl bg-rose-100 text-rose-700 flex items-center justify-center">
+                <Activity className="w-4 h-4" />
+              </div>
+            </div>
+            <div className="text-2xl font-black text-gray-900 mt-2">{data.logs.length}</div>
+            <div className="text-[11px] text-gray-500 mt-0.5 font-medium">
+              Tamper-evident logs logged
+            </div>
           </div>
         </div>
 
@@ -479,64 +565,103 @@ export default function AdminPanelClient({ initialData, adminEmail }: Props) {
                 Create and manage organization departments, working hours, and slot intervals
               </p>
             </div>
-            <button
-              onClick={handleOpenCreateDept}
-              className="inline-flex items-center gap-2 bg-[#22C55E] hover:bg-[#16A34A] text-white font-bold px-4 py-2 rounded-xl text-xs shadow-xs transition-colors cursor-pointer"
-            >
-              <Plus className="w-4 h-4" />
-              <span>Add Department</span>
-            </button>
+            <div className="flex items-center gap-3">
+              <div className="relative max-w-xs w-full">
+                <Search className="w-4 h-4 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                <input
+                  type="text"
+                  placeholder="Search departments..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="w-full pl-9 pr-4 py-2 bg-gray-50 border border-gray-200 rounded-xl text-xs font-medium text-gray-800 focus:outline-none focus:ring-2 focus:ring-[#22C55E]"
+                />
+              </div>
+              <button
+                onClick={handleOpenCreateDept}
+                className="inline-flex items-center gap-2 bg-[#22C55E] hover:bg-[#16A34A] text-white font-bold px-4 py-2 rounded-xl text-xs shadow-xs transition-colors cursor-pointer shrink-0"
+              >
+                <Plus className="w-4 h-4" />
+                <span>Add Department</span>
+              </button>
+            </div>
           </div>
 
-          <div className="overflow-x-auto">
-            <table className="w-full text-left text-sm">
-              <thead className="bg-gray-50 text-gray-500 uppercase text-[11px] font-bold tracking-wider border-y border-gray-200">
+          <div className="overflow-x-auto rounded-2xl border border-gray-100">
+            <table className="w-full text-left text-sm min-w-[760px]">
+              <thead className="bg-gray-50 text-gray-500 uppercase text-[11px] font-bold tracking-wider border-b border-gray-200">
                 <tr>
-                  <th className="py-3 px-4">Department Name</th>
-                  <th className="py-3 px-4">Working Hours</th>
-                  <th className="py-3 px-4">Slot Interval</th>
-                  <th className="py-3 px-4">Max / Slot</th>
-                  <th className="py-3 px-4">Services</th>
-                  <th className="py-3 px-4">Counters</th>
-                  <th className="py-3 px-4 text-right">Actions</th>
+                  <th className="py-3.5 px-4">Department Name</th>
+                  <th className="py-3.5 px-4">Working Hours</th>
+                  <th className="py-3.5 px-4">Slot Interval</th>
+                  <th className="py-3.5 px-4">Capacity / Slot</th>
+                  <th className="py-3.5 px-4">Resources</th>
+                  <th className="py-3.5 px-4 text-right">Actions</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100 font-medium">
-                {data.departments.map((d) => (
-                  <tr key={d.id} className="hover:bg-gray-50/80 transition-colors">
-                    <td className="py-3.5 px-4 font-bold text-gray-900">{d.name}</td>
-                    <td className="py-3.5 px-4 text-gray-700">
-                      {d.open_time} – {d.close_time}
-                    </td>
-                    <td className="py-3.5 px-4 text-gray-700">{d.slot_minutes} mins</td>
-                    <td className="py-3.5 px-4 text-gray-700">{d.max_per_slot} visitors</td>
-                    <td className="py-3.5 px-4">
-                      <span className="bg-gray-100 px-2.5 py-0.5 rounded-full text-xs font-semibold text-gray-700">
-                        {d.services_count} services
-                      </span>
-                    </td>
-                    <td className="py-3.5 px-4">
-                      <span className="bg-gray-100 px-2.5 py-0.5 rounded-full text-xs font-semibold text-gray-700">
-                        {d.counters_count} counters
-                      </span>
-                    </td>
-                    <td className="py-3.5 px-4 text-right space-x-2">
-                      <button
-                        onClick={() => handleOpenEditDept(d)}
-                        className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg border border-gray-200 hover:bg-gray-100 text-gray-700 text-xs font-semibold"
-                      >
-                        <Edit className="w-3.5 h-3.5" />
-                        <span>Edit</span>
-                      </button>
-                      <button
-                        onClick={() => handleDeleteDept(d.id, d.name)}
-                        className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg border border-red-200 hover:bg-red-50 text-red-600 text-xs font-semibold"
-                      >
-                        <Trash2 className="w-3.5 h-3.5" />
-                      </button>
+                {filteredDepts.length === 0 ? (
+                  <tr>
+                    <td colSpan={6} className="py-12 text-center text-gray-400">
+                      <Building2 className="w-8 h-8 mx-auto mb-2 text-gray-300" />
+                      <p className="text-sm font-semibold text-gray-600">No departments found</p>
+                      <p className="text-xs text-gray-400 mt-1">Try adjusting your search query or add a new department.</p>
                     </td>
                   </tr>
-                ))}
+                ) : (
+                  filteredDepts.map((d) => (
+                    <tr key={d.id} className="hover:bg-gray-50/80 transition-colors">
+                      <td className="py-3.5 px-4">
+                        <div className="flex items-center gap-2.5">
+                          <div className="w-8 h-8 rounded-xl bg-gray-100 text-gray-700 flex items-center justify-center font-bold text-xs shrink-0">
+                            <Building2 className="w-4 h-4 text-gray-600" />
+                          </div>
+                          <div>
+                            <span className="font-bold text-gray-900 block">{d.name}</span>
+                            <span className="text-[11px] text-gray-400 font-mono">ID: {d.id.slice(0, 8)}...</span>
+                          </div>
+                        </div>
+                      </td>
+                      <td className="py-3.5 px-4 text-gray-700">
+                        <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-gray-50 border border-gray-200 font-semibold text-xs">
+                          <Clock className="w-3.5 h-3.5 text-gray-500" />
+                          {formatTimeString(d.open_time)} – {formatTimeString(d.close_time)}
+                        </span>
+                      </td>
+                      <td className="py-3.5 px-4 text-gray-700 font-semibold text-xs">
+                        {d.slot_minutes} mins
+                      </td>
+                      <td className="py-3.5 px-4 text-gray-700 text-xs">
+                        <span className="font-bold text-gray-900">{d.max_per_slot}</span> visitors / slot
+                      </td>
+                      <td className="py-3.5 px-4">
+                        <div className="flex items-center gap-1.5">
+                          <span className="bg-emerald-50 border border-emerald-100 px-2 py-0.5 rounded-full text-xs font-semibold text-emerald-700">
+                            {d.services_count ?? 0} services
+                          </span>
+                          <span className="bg-blue-50 border border-blue-100 px-2 py-0.5 rounded-full text-xs font-semibold text-blue-700">
+                            {d.counters_count ?? 0} counters
+                          </span>
+                        </div>
+                      </td>
+                      <td className="py-3.5 px-4 text-right space-x-2">
+                        <button
+                          onClick={() => handleOpenEditDept(d)}
+                          className="inline-flex items-center gap-1 px-3 py-1.5 rounded-xl border border-gray-200 hover:bg-gray-100 text-gray-700 text-xs font-semibold transition-colors cursor-pointer"
+                        >
+                          <Edit className="w-3.5 h-3.5" />
+                          <span>Edit</span>
+                        </button>
+                        <button
+                          onClick={() => handleDeleteDept(d.id, d.name)}
+                          className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-xl border border-red-200 hover:bg-red-50 text-red-600 text-xs font-semibold transition-colors cursor-pointer"
+                          title="Delete department"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      </td>
+                    </tr>
+                  ))
+                )}
               </tbody>
             </table>
           </div>
@@ -558,7 +683,7 @@ export default function AdminPanelClient({ initialData, adminEmail }: Props) {
               <Search className="w-4 h-4 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2" />
               <input
                 type="text"
-                placeholder="Search users by name, email or role..."
+                placeholder="Search users by name, email, phone or role..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 className="w-full pl-9 pr-4 py-2 bg-gray-50 border border-gray-200 rounded-xl text-xs font-medium text-gray-800 focus:outline-none focus:ring-2 focus:ring-[#22C55E]"
@@ -566,67 +691,102 @@ export default function AdminPanelClient({ initialData, adminEmail }: Props) {
             </div>
           </div>
 
-          <div className="overflow-x-auto">
-            <table className="w-full text-left text-sm">
-              <thead className="bg-gray-50 text-gray-500 uppercase text-[11px] font-bold tracking-wider border-y border-gray-200">
+          <div className="overflow-x-auto rounded-2xl border border-gray-100">
+            <table className="w-full text-left text-sm min-w-[780px]">
+              <thead className="bg-gray-50 text-gray-500 uppercase text-[11px] font-bold tracking-wider border-b border-gray-200">
                 <tr>
-                  <th className="py-3 px-4">User</th>
-                  <th className="py-3 px-4">Role</th>
-                  <th className="py-3 px-4">Account Status</th>
-                  <th className="py-3 px-4">No-Show Count</th>
-                  <th className="py-3 px-4">Joined</th>
-                  <th className="py-3 px-4 text-right">Actions</th>
+                  <th className="py-3.5 px-4">User</th>
+                  <th className="py-3.5 px-4">System Role</th>
+                  <th className="py-3.5 px-4">Account Status</th>
+                  <th className="py-3.5 px-4">No-Show History</th>
+                  <th className="py-3.5 px-4">Joined Date</th>
+                  <th className="py-3.5 px-4 text-right">Actions</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100 font-medium">
-                {filteredUsers.map((u) => (
-                  <tr key={u.id} className="hover:bg-gray-50/80 transition-colors">
-                    <td className="py-3.5 px-4">
-                      <div className="font-bold text-gray-900">{u.name}</div>
-                      <div className="text-xs text-gray-400 font-mono">{u.email}</div>
-                    </td>
-                    <td className="py-3.5 px-4">
-                      <span
-                        className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold uppercase tracking-wider ${
-                          u.role === 'admin'
-                            ? 'bg-red-100 text-red-700'
-                            : u.role === 'manager'
-                            ? 'bg-purple-100 text-purple-700'
-                            : u.role === 'staff'
-                            ? 'bg-blue-100 text-blue-700'
-                            : 'bg-green-100 text-green-700'
-                        }`}
-                      >
-                        {u.role}
-                      </span>
-                    </td>
-                    <td className="py-3.5 px-4">
-                      <span
-                        className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-bold capitalize ${
-                          u.account_status === 'active'
-                            ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
-                            : 'bg-rose-50 text-rose-700 border border-rose-200'
-                        }`}
-                      >
-                        <span className={`w-1.5 h-1.5 rounded-full ${u.account_status === 'active' ? 'bg-[#22C55E]' : 'bg-rose-500'}`} />
-                        {u.account_status}
-                      </span>
-                    </td>
-                    <td className="py-3.5 px-4 text-gray-700">{u.no_show_count}</td>
-                    <td className="py-3.5 px-4 text-gray-400 text-xs">
-                      {new Date(u.created_at).toLocaleDateString([], { month: 'short', day: 'numeric', year: 'numeric' })}
-                    </td>
-                    <td className="py-3.5 px-4 text-right">
-                      <button
-                        onClick={() => handleOpenEditUser(u)}
-                        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-gray-200 hover:bg-gray-100 text-gray-700 text-xs font-semibold transition-colors cursor-pointer shadow-xs"
-                      >
-                        <Edit className="w-3.5 h-3.5" />
-                        <span>Change Role</span>
-                      </button>
+                {filteredUsers.length === 0 ? (
+                  <tr>
+                    <td colSpan={6} className="py-12 text-center text-gray-400">
+                      <Users className="w-8 h-8 mx-auto mb-2 text-gray-300" />
+                      <p className="text-sm font-semibold text-gray-600">No users match your criteria</p>
+                      <p className="text-xs text-gray-400 mt-1">Try modifying the search filter query.</p>
                     </td>
                   </tr>
-                ))}
+                ) : (
+                  filteredUsers.map((u) => {
+                    const initials = (u.name || u.email || 'U').slice(0, 2).toUpperCase()
+                    return (
+                      <tr key={u.id} className="hover:bg-gray-50/80 transition-colors">
+                        <td className="py-3.5 px-4">
+                          <div className="flex items-center gap-3">
+                            <div className="w-9 h-9 rounded-full bg-emerald-100 text-emerald-800 font-bold flex items-center justify-center text-xs shrink-0">
+                              {initials}
+                            </div>
+                            <div>
+                              <div className="font-bold text-gray-900">{u.name || 'Unnamed User'}</div>
+                              <div className="text-xs text-gray-500 font-mono">{u.email}</div>
+                              {u.phone && (
+                                <div className="text-[11px] text-gray-400 flex items-center gap-1 mt-0.5">
+                                  <Phone className="w-3 h-3 text-gray-400" />
+                                  <span>{u.phone}</span>
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        </td>
+                        <td className="py-3.5 px-4">
+                          <span
+                            className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-bold uppercase tracking-wider border ${
+                              u.role === 'admin'
+                                ? 'bg-rose-50 text-rose-700 border-rose-200'
+                                : u.role === 'manager'
+                                ? 'bg-purple-50 text-purple-700 border-purple-200'
+                                : u.role === 'staff'
+                                ? 'bg-blue-50 text-blue-700 border-blue-200'
+                                : 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                            }`}
+                          >
+                            {u.role}
+                          </span>
+                        </td>
+                        <td className="py-3.5 px-4">
+                          <span
+                            className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-bold capitalize ${
+                              u.account_status === 'active'
+                                ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+                                : 'bg-rose-50 text-rose-700 border border-rose-200'
+                            }`}
+                          >
+                            <span className={`w-1.5 h-1.5 rounded-full ${u.account_status === 'active' ? 'bg-[#22C55E]' : 'bg-rose-500'}`} />
+                            {u.account_status}
+                          </span>
+                        </td>
+                        <td className="py-3.5 px-4">
+                          {u.no_show_count > 0 ? (
+                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-amber-50 text-amber-700 border border-amber-200 text-xs font-bold">
+                              <AlertTriangle className="w-3 h-3 text-amber-600" />
+                              {u.no_show_count} strike{u.no_show_count > 1 ? 's' : ''}
+                            </span>
+                          ) : (
+                            <span className="text-gray-400 text-xs font-medium">0 no-shows</span>
+                          )}
+                        </td>
+                        <td className="py-3.5 px-4 text-gray-500 text-xs">
+                          {new Date(u.created_at).toLocaleDateString([], { month: 'short', day: 'numeric', year: 'numeric' })}
+                        </td>
+                        <td className="py-3.5 px-4 text-right">
+                          <button
+                            onClick={() => handleOpenEditUser(u)}
+                            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-gray-200 hover:bg-gray-100 text-gray-700 text-xs font-semibold transition-colors cursor-pointer shadow-xs"
+                          >
+                            <Edit className="w-3.5 h-3.5" />
+                            <span>Change Role</span>
+                          </button>
+                        </td>
+                      </tr>
+                    )
+                  })
+                )}
               </tbody>
             </table>
           </div>
@@ -643,67 +803,111 @@ export default function AdminPanelClient({ initialData, adminEmail }: Props) {
                 Define available public services, ticket prefixes, target SLAs, and priority levels
               </p>
             </div>
-            <button
-              onClick={handleOpenCreateService}
-              className="inline-flex items-center gap-2 bg-[#22C55E] hover:bg-[#16A34A] text-white font-bold px-4 py-2 rounded-xl text-xs shadow-xs transition-colors cursor-pointer"
-            >
-              <Plus className="w-4 h-4" />
-              <span>Add Service</span>
-            </button>
+            <div className="flex items-center gap-3">
+              <div className="relative max-w-xs w-full">
+                <Search className="w-4 h-4 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                <input
+                  type="text"
+                  placeholder="Search services or prefix..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="w-full pl-9 pr-4 py-2 bg-gray-50 border border-gray-200 rounded-xl text-xs font-medium text-gray-800 focus:outline-none focus:ring-2 focus:ring-[#22C55E]"
+                />
+              </div>
+              <button
+                onClick={handleOpenCreateService}
+                className="inline-flex items-center gap-2 bg-[#22C55E] hover:bg-[#16A34A] text-white font-bold px-4 py-2 rounded-xl text-xs shadow-xs transition-colors cursor-pointer shrink-0"
+              >
+                <Plus className="w-4 h-4" />
+                <span>Add Service</span>
+              </button>
+            </div>
           </div>
 
-          <div className="overflow-x-auto">
-            <table className="w-full text-left text-sm">
-              <thead className="bg-gray-50 text-gray-500 uppercase text-[11px] font-bold tracking-wider border-y border-gray-200">
+          <div className="overflow-x-auto rounded-2xl border border-gray-100">
+            <table className="w-full text-left text-sm min-w-[760px]">
+              <thead className="bg-gray-50 text-gray-500 uppercase text-[11px] font-bold tracking-wider border-b border-gray-200">
                 <tr>
-                  <th className="py-3 px-4">Service</th>
-                  <th className="py-3 px-4">Department</th>
-                  <th className="py-3 px-4">Prefix</th>
-                  <th className="py-3 px-4">Target Duration</th>
-                  <th className="py-3 px-4">Priority Level</th>
-                  <th className="py-3 px-4">Status</th>
-                  <th className="py-3 px-4 text-right">Actions</th>
+                  <th className="py-3.5 px-4">Service</th>
+                  <th className="py-3.5 px-4">Department</th>
+                  <th className="py-3.5 px-4">Prefix</th>
+                  <th className="py-3.5 px-4">Target Duration</th>
+                  <th className="py-3.5 px-4">Priority Level</th>
+                  <th className="py-3.5 px-4">Status</th>
+                  <th className="py-3.5 px-4 text-right">Actions</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100 font-medium">
-                {data.services.map((s) => (
-                  <tr key={s.id} className="hover:bg-gray-50/80 transition-colors">
-                    <td className="py-3.5 px-4 font-bold text-gray-900">{s.name}</td>
-                    <td className="py-3.5 px-4 text-gray-600">{s.department_name}</td>
-                    <td className="py-3.5 px-4 font-mono font-bold text-emerald-700">{s.prefix}</td>
-                    <td className="py-3.5 px-4 text-gray-700">{s.avg_duration} mins</td>
-                    <td className="py-3.5 px-4 text-gray-700">
-                      <span className="font-semibold text-xs">P{s.priority_level}</span>
-                    </td>
-                    <td className="py-3.5 px-4">
-                      <span
-                        className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-bold uppercase ${
-                          s.active
-                            ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
-                            : 'bg-rose-50 text-rose-700 border border-rose-200'
-                        }`}
-                      >
-                        <span className={`w-1.5 h-1.5 rounded-full ${s.active ? 'bg-[#22C55E]' : 'bg-rose-500'}`} />
-                        {s.active ? 'Active' : 'Disabled'}
-                      </span>
-                    </td>
-                    <td className="py-3.5 px-4 text-right space-x-2">
-                      <button
-                        onClick={() => handleOpenEditService(s)}
-                        className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg border border-gray-200 hover:bg-gray-100 text-gray-700 text-xs font-semibold"
-                      >
-                        <Edit className="w-3.5 h-3.5" />
-                        <span>Edit</span>
-                      </button>
-                      <button
-                        onClick={() => handleDeleteService(s.id, s.name)}
-                        className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg border border-red-200 hover:bg-red-50 text-red-600 text-xs font-semibold"
-                      >
-                        <Trash2 className="w-3.5 h-3.5" />
-                      </button>
+                {filteredServices.length === 0 ? (
+                  <tr>
+                    <td colSpan={7} className="py-12 text-center text-gray-400">
+                      <Layers className="w-8 h-8 mx-auto mb-2 text-gray-300" />
+                      <p className="text-sm font-semibold text-gray-600">No services match your criteria</p>
+                      <p className="text-xs text-gray-400 mt-1">Try searching a different keyword or create a service.</p>
                     </td>
                   </tr>
-                ))}
+                ) : (
+                  filteredServices.map((s) => (
+                    <tr key={s.id} className="hover:bg-gray-50/80 transition-colors">
+                      <td className="py-3.5 px-4 font-bold text-gray-900">{s.name}</td>
+                      <td className="py-3.5 px-4 text-gray-600">
+                        <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-lg bg-gray-50 border border-gray-200 text-xs font-medium text-gray-700">
+                          {s.department_name}
+                        </span>
+                      </td>
+                      <td className="py-3.5 px-4">
+                        <span className="px-2.5 py-1 rounded-md bg-emerald-50 border border-emerald-200 text-emerald-800 font-mono font-bold text-xs">
+                          {s.prefix}
+                        </span>
+                      </td>
+                      <td className="py-3.5 px-4 text-gray-700 text-xs font-semibold">
+                        <span className="inline-flex items-center gap-1">
+                          <Clock className="w-3.5 h-3.5 text-gray-400" />
+                          {s.avg_duration} mins
+                        </span>
+                      </td>
+                      <td className="py-3.5 px-4 text-gray-700">
+                        <span className={`px-2 py-0.5 rounded-md text-xs font-bold ${
+                          s.priority_level > 2
+                            ? 'bg-rose-50 text-rose-700 border border-rose-200'
+                            : s.priority_level > 0
+                            ? 'bg-amber-50 text-amber-700 border border-amber-200'
+                            : 'bg-gray-100 text-gray-700'
+                        }`}>
+                          P{s.priority_level} {s.priority_level > 2 ? '(Urgent)' : s.priority_level > 0 ? '(High)' : '(Standard)'}
+                        </span>
+                      </td>
+                      <td className="py-3.5 px-4">
+                        <span
+                          className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-bold uppercase ${
+                            s.active
+                              ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+                              : 'bg-rose-50 text-rose-700 border border-rose-200'
+                          }`}
+                        >
+                          <span className={`w-1.5 h-1.5 rounded-full ${s.active ? 'bg-[#22C55E]' : 'bg-rose-500'}`} />
+                          {s.active ? 'Active' : 'Disabled'}
+                        </span>
+                      </td>
+                      <td className="py-3.5 px-4 text-right space-x-2">
+                        <button
+                          onClick={() => handleOpenEditService(s)}
+                          className="inline-flex items-center gap-1 px-3 py-1.5 rounded-xl border border-gray-200 hover:bg-gray-100 text-gray-700 text-xs font-semibold transition-colors cursor-pointer"
+                        >
+                          <Edit className="w-3.5 h-3.5" />
+                          <span>Edit</span>
+                        </button>
+                        <button
+                          onClick={() => handleDeleteService(s.id, s.name)}
+                          className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-xl border border-red-200 hover:bg-red-50 text-red-600 text-xs font-semibold transition-colors cursor-pointer"
+                          title="Delete service"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      </td>
+                    </tr>
+                  ))
+                )}
               </tbody>
             </table>
           </div>
@@ -713,59 +917,82 @@ export default function AdminPanelClient({ initialData, adminEmail }: Props) {
       {/* ── TAB 4: RULES & LIMITS ─────────────────────────────────── */}
       {activeTab === 'rules' && (
         <div className="bg-white rounded-3xl border border-gray-100 shadow-sm p-6 md:p-8 space-y-6 animate-in fade-in duration-300">
-          <div>
-            <h2 className="text-xl font-bold text-gray-900">Department Rules & Quota Policies</h2>
-            <p className="text-xs text-gray-500">
-              Configure strict business limits enforced by database RPCs (prevent overbooking & queue spam)
-            </p>
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <div>
+              <h2 className="text-xl font-bold text-gray-900">Department Rules & Quota Policies</h2>
+              <p className="text-xs text-gray-500">
+                Configure strict business limits enforced by database RPCs (prevent overbooking & queue spam)
+              </p>
+            </div>
+            <div className="relative max-w-xs w-full">
+              <Search className="w-4 h-4 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2" />
+              <input
+                type="text"
+                placeholder="Filter department rules..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="w-full pl-9 pr-4 py-2 bg-gray-50 border border-gray-200 rounded-xl text-xs font-medium text-gray-800 focus:outline-none focus:ring-2 focus:ring-[#22C55E]"
+              />
+            </div>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {data.rules.map((r) => (
-              <div
-                key={r.department_id}
-                className="border border-gray-200 rounded-2xl p-5 bg-gray-50/50 flex flex-col justify-between"
-              >
-                <div>
-                  <div className="flex items-center justify-between mb-3">
-                    <span className="text-base font-black text-gray-900">{r.department_name}</span>
-                    <Sliders className="w-5 h-5 text-gray-400" />
-                  </div>
-
-                  <div className="space-y-2.5 text-xs text-gray-600">
-                    <div className="flex justify-between py-1 border-b border-gray-200/60">
-                      <span>Max Appointments / User / Day:</span>
-                      <span className="font-bold text-gray-900">{r.max_appts_per_user_day}</span>
-                    </div>
-                    <div className="flex justify-between py-1 border-b border-gray-200/60">
-                      <span>Max Active Tokens / User:</span>
-                      <span className="font-bold text-gray-900">{r.max_active_tokens}</span>
-                    </div>
-                    <div className="flex justify-between py-1 border-b border-gray-200/60">
-                      <span>Cancellation Limit / Month:</span>
-                      <span className="font-bold text-gray-900">{r.cancel_limit}</span>
-                    </div>
-                    <div className="flex justify-between py-1 border-b border-gray-200/60">
-                      <span>Early Check-in Window:</span>
-                      <span className="font-bold text-gray-900">{r.early_checkin_minutes} mins before</span>
-                    </div>
-                    <div className="flex justify-between py-1 border-b border-gray-200/60">
-                      <span>Late Check-in Window:</span>
-                      <span className="font-bold text-gray-900">{r.late_checkin_minutes} mins after</span>
-                    </div>
-                  </div>
-                </div>
-
-                <button
-                  onClick={() => handleOpenEditRules(r)}
-                  className="mt-5 w-full inline-flex items-center justify-center gap-1.5 px-4 py-2 rounded-xl bg-white border border-gray-200 hover:bg-gray-100 text-gray-800 text-xs font-bold transition-colors cursor-pointer shadow-xs"
+          {filteredRules.length === 0 ? (
+            <div className="py-12 text-center text-gray-400 border border-dashed border-gray-200 rounded-2xl">
+              <Sliders className="w-8 h-8 mx-auto mb-2 text-gray-300" />
+              <p className="text-sm font-semibold text-gray-600">No rule policies found</p>
+              <p className="text-xs text-gray-400 mt-1">Departments must exist to configure quotas.</p>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              {filteredRules.map((r) => (
+                <div
+                  key={r.department_id}
+                  className="border border-gray-200 rounded-2xl p-5 bg-gray-50/50 flex flex-col justify-between hover:border-gray-300 hover:shadow-xs transition-all"
                 >
-                  <Edit className="w-3.5 h-3.5" />
-                  <span>Update Policy Limits</span>
-                </button>
-              </div>
-            ))}
-          </div>
+                  <div>
+                    <div className="flex items-center justify-between mb-3 pb-2 border-b border-gray-200">
+                      <div className="flex items-center gap-2">
+                        <Building2 className="w-4 h-4 text-[#22C55E]" />
+                        <span className="text-base font-bold text-gray-900">{r.department_name}</span>
+                      </div>
+                      <Sliders className="w-4 h-4 text-gray-400" />
+                    </div>
+
+                    <div className="space-y-2.5 text-xs text-gray-600">
+                      <div className="flex justify-between py-1 border-b border-gray-200/60">
+                        <span>Max Appointments / User / Day:</span>
+                        <span className="font-bold text-gray-900 bg-white px-2 py-0.5 rounded border border-gray-200">{r.max_appts_per_user_day}</span>
+                      </div>
+                      <div className="flex justify-between py-1 border-b border-gray-200/60">
+                        <span>Max Active Tokens / User:</span>
+                        <span className="font-bold text-gray-900 bg-white px-2 py-0.5 rounded border border-gray-200">{r.max_active_tokens}</span>
+                      </div>
+                      <div className="flex justify-between py-1 border-b border-gray-200/60">
+                        <span>Cancellation Limit / Month:</span>
+                        <span className="font-bold text-gray-900 bg-white px-2 py-0.5 rounded border border-gray-200">{r.cancel_limit}</span>
+                      </div>
+                      <div className="flex justify-between py-1 border-b border-gray-200/60">
+                        <span>Early Check-in Window:</span>
+                        <span className="font-bold text-gray-900">{r.early_checkin_minutes} mins before</span>
+                      </div>
+                      <div className="flex justify-between py-1 border-b border-gray-200/60">
+                        <span>Late Check-in Grace Window:</span>
+                        <span className="font-bold text-gray-900">{r.late_checkin_minutes} mins after</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  <button
+                    onClick={() => handleOpenEditRules(r)}
+                    className="mt-5 w-full inline-flex items-center justify-center gap-1.5 px-4 py-2 rounded-xl bg-white border border-gray-200 hover:bg-gray-100 text-gray-800 text-xs font-bold transition-colors cursor-pointer shadow-xs"
+                  >
+                    <Edit className="w-3.5 h-3.5" />
+                    <span>Update Policy Limits</span>
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       )}
 
@@ -784,7 +1011,7 @@ export default function AdminPanelClient({ initialData, adminEmail }: Props) {
               <Search className="w-4 h-4 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2" />
               <input
                 type="text"
-                placeholder="Filter logs by action or actor..."
+                placeholder="Filter logs by action, actor or entity..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 className="w-full pl-9 pr-4 py-2 bg-gray-50 border border-gray-200 rounded-xl text-xs font-medium text-gray-800 focus:outline-none focus:ring-2 focus:ring-[#22C55E]"
@@ -792,51 +1019,69 @@ export default function AdminPanelClient({ initialData, adminEmail }: Props) {
             </div>
           </div>
 
-          <div className="overflow-x-auto">
-            <table className="w-full text-left text-sm">
-              <thead className="bg-gray-50 text-gray-500 uppercase text-[11px] font-bold tracking-wider border-y border-gray-200">
+          <div className="overflow-x-auto rounded-2xl border border-gray-100">
+            <table className="w-full text-left text-sm min-w-[760px]">
+              <thead className="bg-gray-50 text-gray-500 uppercase text-[11px] font-bold tracking-wider border-b border-gray-200">
                 <tr>
-                  <th className="py-3 px-4">Timestamp</th>
-                  <th className="py-3 px-4">Action</th>
-                  <th className="py-3 px-4">Actor</th>
-                  <th className="py-3 px-4">Entity</th>
-                  <th className="py-3 px-4">Entity ID</th>
+                  <th className="py-3.5 px-4">Timestamp</th>
+                  <th className="py-3.5 px-4">Action</th>
+                  <th className="py-3.5 px-4">Actor</th>
+                  <th className="py-3.5 px-4">Entity</th>
+                  <th className="py-3.5 px-4">Target ID</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100 font-medium text-xs">
                 {filteredLogs.length === 0 ? (
                   <tr>
-                    <td colSpan={5} className="py-8 text-center text-gray-400">
-                      No logs matching search criteria.
+                    <td colSpan={5} className="py-12 text-center text-gray-400">
+                      <FileText className="w-8 h-8 mx-auto mb-2 text-gray-300" />
+                      <p className="text-sm font-semibold text-gray-600">No activity logs found</p>
+                      <p className="text-xs text-gray-400 mt-1">No logs match the current search criteria.</p>
                     </td>
                   </tr>
                 ) : (
-                  filteredLogs.map((l) => (
-                    <tr key={l.id} className="hover:bg-gray-50/80 transition-colors">
-                      <td className="py-3 px-4 text-gray-500 font-mono">
-                        {new Date(l.created_at).toLocaleString([], {
-                          month: 'short',
-                          day: 'numeric',
-                          hour: '2-digit',
-                          minute: '2-digit',
-                          second: '2-digit',
-                        })}
-                      </td>
-                      <td className="py-3 px-4">
-                        <span className="font-mono font-bold text-gray-900 bg-gray-100 px-2 py-0.5 rounded">
-                          {l.action}
-                        </span>
-                      </td>
-                      <td className="py-3 px-4">
-                        <div className="font-semibold text-gray-800">{l.actor_name}</div>
-                        <div className="text-[10px] text-gray-400 truncate max-w-[160px]">{l.actor_email}</div>
-                      </td>
-                      <td className="py-3 px-4 text-gray-600 capitalize">{l.entity || '—'}</td>
-                      <td className="py-3 px-4 text-gray-400 font-mono text-[11px]">
-                        {l.entity_id ? `${l.entity_id.slice(0, 8)}...` : '—'}
-                      </td>
-                    </tr>
-                  ))
+                  filteredLogs.map((l) => {
+                    const isCreate = l.action.toLowerCase().includes('create') || l.action.toLowerCase().includes('insert')
+                    const isDelete = l.action.toLowerCase().includes('delete') || l.action.toLowerCase().includes('cancel')
+                    const isUpdate = l.action.toLowerCase().includes('update') || l.action.toLowerCase().includes('call')
+
+                    return (
+                      <tr key={l.id} className="hover:bg-gray-50/80 transition-colors">
+                        <td className="py-3 px-4 text-gray-500 font-mono text-[11px]">
+                          {new Date(l.created_at).toLocaleString([], {
+                            month: 'short',
+                            day: 'numeric',
+                            hour: '2-digit',
+                            minute: '2-digit',
+                            second: '2-digit',
+                          })}
+                        </td>
+                        <td className="py-3 px-4">
+                          <span
+                            className={`font-mono font-bold text-[11px] px-2 py-0.5 rounded border ${
+                              isCreate
+                                ? 'bg-emerald-50 text-emerald-800 border-emerald-200'
+                                : isDelete
+                                ? 'bg-rose-50 text-rose-800 border-rose-200'
+                                : isUpdate
+                                ? 'bg-blue-50 text-blue-800 border-blue-200'
+                                : 'bg-gray-100 text-gray-800 border-gray-200'
+                            }`}
+                          >
+                            {l.action}
+                          </span>
+                        </td>
+                        <td className="py-3 px-4">
+                          <div className="font-semibold text-gray-900">{l.actor_name}</div>
+                          <div className="text-[10px] text-gray-400 truncate max-w-[200px] font-mono">{l.actor_email}</div>
+                        </td>
+                        <td className="py-3 px-4 text-gray-700 capitalize font-medium">{l.entity || '—'}</td>
+                        <td className="py-3 px-4 text-gray-400 font-mono text-[11px]">
+                          {l.entity_id ? `${l.entity_id.slice(0, 8)}...` : '—'}
+                        </td>
+                      </tr>
+                    )
+                  })
                 )}
               </tbody>
             </table>
