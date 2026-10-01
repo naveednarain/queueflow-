@@ -105,7 +105,7 @@ export default function BookWizard({ departments, userEmail }: Props) {
   }
 
   const handleConfirmBooking = async () => {
-    if (!selectedServiceId || !selectedDate || !selectedSlot) return
+    if (!selectedServiceId || !selectedDate || !selectedSlot || bookingPending) return
     setBookingPending(true)
 
     try {
@@ -415,7 +415,7 @@ export default function BookWizard({ departments, userEmail }: Props) {
                   type="button"
                   onClick={handleConfirmBooking}
                   disabled={bookingPending}
-                  className="flex items-center justify-center gap-2 bg-[#22C55E] hover:bg-green-600 text-white font-bold py-3.5 px-6 rounded-xl shadow-md shadow-green-200 transition-all cursor-pointer text-sm shrink-0"
+                  className="flex items-center justify-center gap-2 bg-[#22C55E] hover:bg-green-600 text-white font-bold py-3.5 px-6 rounded-xl shadow-md shadow-green-200 transition-all cursor-pointer text-sm shrink-0 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   {bookingPending ? (
                     <>

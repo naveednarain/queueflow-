@@ -41,6 +41,7 @@ export default function TokenFlow({ departments, userId }: Props) {
   const activeService = activeDept?.services.find((s) => s.id === selectedService)
 
   const handleGetToken = async () => {
+    if (loading) return
     if (!selectedService) {
       toast.error('Please select a service first.')
       return

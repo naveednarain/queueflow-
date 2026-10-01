@@ -208,7 +208,7 @@ export default function StaffClient({ initialCounters, userEmail, userRole }: Pr
   }
 
   const handleCallNext = async () => {
-    if (!activeCounter) return
+    if (!activeCounter || actionPending) return
     setActionPending(true)
     try {
       playChime()
@@ -227,7 +227,7 @@ export default function StaffClient({ initialCounters, userEmail, userRole }: Pr
   }
 
   const handleStartService = async () => {
-    if (!currentToken) return
+    if (!currentToken || actionPending) return
     setActionPending(true)
     try {
       const res = await startService(currentToken.id)
@@ -245,7 +245,7 @@ export default function StaffClient({ initialCounters, userEmail, userRole }: Pr
   }
 
   const handleCompleteService = async () => {
-    if (!currentToken) return
+    if (!currentToken || actionPending) return
     setActionPending(true)
     try {
       const res = await completeService(currentToken.id)
@@ -263,7 +263,7 @@ export default function StaffClient({ initialCounters, userEmail, userRole }: Pr
   }
 
   const handleRecall = async () => {
-    if (!currentToken) return
+    if (!currentToken || actionPending) return
     setActionPending(true)
     try {
       playChime()
@@ -282,7 +282,7 @@ export default function StaffClient({ initialCounters, userEmail, userRole }: Pr
   }
 
   const handleSkip = async () => {
-    if (!currentToken) return
+    if (!currentToken || actionPending) return
     setActionPending(true)
     try {
       const res = await skipToken(currentToken.id)
@@ -300,7 +300,7 @@ export default function StaffClient({ initialCounters, userEmail, userRole }: Pr
   }
 
   const handleMarkMissed = async () => {
-    if (!currentToken) return
+    if (!currentToken || actionPending) return
     setActionPending(true)
     try {
       const res = await markTokenMissed(currentToken.id)

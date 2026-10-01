@@ -210,6 +210,7 @@ export default function MyQueueClient({
   }
 
   const handleCheckIn = async (appointmentId: string) => {
+    if (actionPending) return
     setActionPending(true)
     try {
       const res = await checkInAppointment(appointmentId)
@@ -229,6 +230,7 @@ export default function MyQueueClient({
   }
 
   const handleCancelAppointment = async (appointmentId: string, refNo: string | null) => {
+    if (actionPending) return
     if (!confirm(`Are you sure you want to cancel appointment ${refNo || ''}?`)) return
     setActionPending(true)
     try {

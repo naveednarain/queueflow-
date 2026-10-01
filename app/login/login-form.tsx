@@ -33,6 +33,7 @@ export default function LoginForm() {
 
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault()
+    if (loading) return
     setLoading(true)
     const formData = new FormData(e.currentTarget)
     try {
