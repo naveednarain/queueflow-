@@ -1219,4 +1219,354 @@ grant execute on function cancel_appointment(uuid) to authenticated;
 grant execute on function reschedule_appointment(uuid, date, time) to authenticated;
 grant execute on function mark_missed_appointments() to authenticated, anon;
 
+-- ============================================================
+-- Phase 6: Manager Dashboard & Management RPCs
+-- ============================================================
+
+create or replace function get_dashboard_stats(
+  p_from timestamptz default (current_date - interval '14 days'),
+  p_to timestamptz default now()
+)
+returns jsonb
+language plpgsql security definer set search_path = public as $$
+declare
+  v_role user_role;
+  v_busiest_dept text;
+  v_busiest_serv text;
+  v_peak_hour_int int;
+  v_peak_hour_str text;
+  v_appts_today int;
+  v_walkin_count int;
+  v_waiting_count int;
+  v_active_counters int;
+  v_completed_count int;
+  v_missed_count int;
+  v_cancelled_count int;
+  v_avg_wait numeric;
+  v_avg_service numeric;
+  v_no_show_rate numeric;
+  v_cancellation_rate numeric;
+  v_queue_by_hour jsonb;
+  v_wait_by_dept jsonb;
+  v_staff_workload jsonb;
+  v_service_time jsonb;
+  v_daily_trend jsonb;
+begin
+  -- Role check: manager or admin if authenticated
+  select role into v_role from profiles where id = auth.uid();
+  if v_role is not null and v_role not in ('manager', 'admin') then
+    raise exception 'Unauthorized: Manager or Admin role required';
+  end if;
+
+  -- 1. Appointments Today
+  select count(*) into v_appts_today
+  from appointments
+  where appointment_date = current_date;
+
+  -- 2. Walk-in tokens in period
+  select count(*) into v_walkin_count
+  from tokens
+  where appointment_id is null and created_at between p_from and p_to;
+
+  -- 3. Currently waiting tokens right now
+  select count(*) into v_waiting_count
+  from tokens
+  where status in ('waiting', 'recalled');
+
+  -- 4. Active counters right now
+  select count(*) into v_active_counters
+  from counters
+  where status in ('available', 'busy');
+
+  -- 5. Completed & Missed in period
+  select count(*) into v_completed_count
+  from tokens
+  where status = 'completed' and (completed_at between p_from and p_to or (completed_at is null and created_at between p_from and p_to));
+
+  select count(*) into v_missed_count
+  from tokens
+  where status = 'missed' and created_at between p_from and p_to;
+
+  select count(*) into v_cancelled_count
+  from appointments
+  where status = 'cancelled' and created_at between p_from and p_to;
+
+  -- 6. Avg wait time (minutes)
+  select coalesce(round(avg(extract(epoch from (called_at - created_at))/60)::numeric, 1), 0) into v_avg_wait
+  from tokens
+  where called_at is not null and created_at between p_from and p_to;
+
+  -- 7. Avg service duration (minutes)
+  select coalesce(round(avg(extract(epoch from (completed_at - started_at))/60)::numeric, 1), 0) into v_avg_service
+  from tokens
+  where status = 'completed' and started_at is not null and completed_at is not null
+    and created_at between p_from and p_to;
+
+  -- 8. Rates
+  if (v_completed_count + v_missed_count) > 0 then
+    v_no_show_rate := round((v_missed_count::numeric / (v_completed_count + v_missed_count)::numeric) * 100, 1);
+  else
+    v_no_show_rate := 0;
+  end if;
+
+  select coalesce(round((count(*) filter (where status = 'cancelled')::numeric / greatest(count(*)::numeric, 1)) * 100, 1), 0)
+  into v_cancellation_rate
+  from appointments
+  where created_at between p_from and p_to;
+
+  -- 9. Busiest Department
+  select coalesce(d.name, 'N/A') into v_busiest_dept
+  from tokens t
+  join services s on s.id = t.service_id
+  join departments d on d.id = s.department_id
+  where t.created_at between p_from and p_to
+  group by d.name
+  order by count(*) desc
+  limit 1;
+
+  -- 10. Busiest Service
+  select coalesce(s.name, 'N/A') into v_busiest_serv
+  from tokens t
+  join services s on s.id = t.service_id
+  where t.created_at between p_from and p_to
+  group by s.name
+  order by count(*) desc
+  limit 1;
+
+  -- 11. Peak Hour
+  select extract(hour from created_at)::int into v_peak_hour_int
+  from tokens
+  where created_at between p_from and p_to
+  group by extract(hour from created_at)
+  order by count(*) desc
+  limit 1;
+
+  if v_peak_hour_int is not null then
+    v_peak_hour_str := to_char(make_time(v_peak_hour_int, 0, 0), 'HH12:MI AM') || ' - ' ||
+                       to_char(make_time((v_peak_hour_int + 1) % 24, 0, 0), 'HH12:MI AM');
+  else
+    v_peak_hour_str := '11:00 AM - 12:00 PM';
+    v_peak_hour_int := 11;
+  end if;
+
+  -- 12. Chart: Queue by Hour (hours 8 to 17)
+  with hours as (
+    select generate_series(8, 17) as h
+  ),
+  hourly_counts as (
+    select extract(hour from created_at)::int as h, count(*) as cnt
+    from tokens
+    where created_at between p_from and p_to
+    group by extract(hour from created_at)
+  )
+  select jsonb_agg(
+    jsonb_build_object(
+      'hour', to_char(make_time(hours.h, 0, 0), 'HH12 AM'),
+      'raw_hour', hours.h,
+      'count', coalesce(hourly_counts.cnt, 0),
+      'is_peak', (hours.h = v_peak_hour_int)
+    ) order by hours.h
+  ) into v_queue_by_hour
+  from hours
+  left join hourly_counts on hourly_counts.h = hours.h;
+
+  -- 13. Chart: Wait Time by Department
+  with dept_stats as (
+    select
+      d.name as department,
+      coalesce(round(avg(extract(epoch from (t.called_at - t.created_at))/60)::numeric, 1), 0) as avg_wait,
+      count(t.id) as token_count
+    from departments d
+    left join services s on s.department_id = d.id
+    left join tokens t on t.service_id = s.id and t.created_at between p_from and p_to
+    group by d.name
+  )
+  select jsonb_agg(
+    jsonb_build_object(
+      'department', department,
+      'avg_wait', avg_wait,
+      'token_count', token_count
+    )
+  ) into v_wait_by_dept
+  from dept_stats;
+
+  -- 14. Chart: Staff Workload
+  with staff_stats as (
+    select
+      p.name as staff_name,
+      count(t.id) as completed,
+      coalesce(round(avg(extract(epoch from (t.completed_at - t.started_at))/60)::numeric, 1), 0) as avg_duration
+    from profiles p
+    join counters c on c.assigned_staff = p.id
+    left join tokens t on t.counter_id = c.id and t.status = 'completed' and t.created_at between p_from and p_to
+    where p.role in ('staff', 'manager', 'admin')
+    group by p.id, p.name
+  )
+  select jsonb_agg(
+    jsonb_build_object(
+      'staff_name', staff_name,
+      'completed', completed,
+      'avg_duration', avg_duration
+    )
+  ) into v_staff_workload
+  from staff_stats;
+
+  -- 15. Chart: Service Completion Time vs Target Duration
+  with serv_stats as (
+    select
+      s.name as service,
+      coalesce(round(avg(extract(epoch from (t.completed_at - t.started_at))/60)::numeric, 1), s.avg_duration) as avg_duration,
+      s.avg_duration as target_duration,
+      count(t.id) filter (where t.status = 'completed') as completed_count
+    from services s
+    left join tokens t on t.service_id = s.id and t.created_at between p_from and p_to
+    group by s.id, s.name, s.avg_duration
+  )
+  select jsonb_agg(
+    jsonb_build_object(
+      'service', service,
+      'avg_duration', avg_duration,
+      'target_duration', target_duration,
+      'completed_count', completed_count
+    )
+  ) into v_service_time
+  from serv_stats;
+
+  -- 16. Chart: Daily Trend (Tokens & Appointments over period)
+  with dates as (
+    select generate_series(p_from::date, p_to::date, '1 day'::interval)::date as dt
+  ),
+  daily_tokens as (
+    select created_at::date as dt, count(*) as cnt
+    from tokens
+    where created_at between p_from and p_to
+    group by created_at::date
+  ),
+  daily_appts as (
+    select appointment_date as dt, count(*) as cnt
+    from appointments
+    where appointment_date between p_from::date and p_to::date
+    group by appointment_date
+  )
+  select jsonb_agg(
+    jsonb_build_object(
+      'date', to_char(dates.dt, 'Mon DD'),
+      'tokens', coalesce(daily_tokens.cnt, 0),
+      'appointments', coalesce(daily_appts.cnt, 0)
+    ) order by dates.dt
+  ) into v_daily_trend
+  from dates
+  left join daily_tokens on daily_tokens.dt = dates.dt
+  left join daily_appts on daily_appts.dt = dates.dt;
+
+  -- Assemble final JSON
+  return jsonb_build_object(
+    'summary', jsonb_build_object(
+      'appts_today', v_appts_today,
+      'walkin_tokens', v_walkin_count,
+      'waiting_tokens', v_waiting_count,
+      'active_counters', v_active_counters,
+      'completed_tokens', v_completed_count,
+      'missed_tokens', v_missed_count,
+      'cancelled_appts', v_cancelled_count,
+      'avg_wait_minutes', v_avg_wait,
+      'avg_service_minutes', v_avg_service,
+      'busiest_department', coalesce(v_busiest_dept, 'N/A'),
+      'busiest_service', coalesce(v_busiest_serv, 'N/A'),
+      'peak_hour', v_peak_hour_str,
+      'no_show_rate', v_no_show_rate,
+      'cancellation_rate', v_cancellation_rate
+    ),
+    'charts', jsonb_build_object(
+      'queue_by_hour', coalesce(v_queue_by_hour, '[]'::jsonb),
+      'wait_by_department', coalesce(v_wait_by_dept, '[]'::jsonb),
+      'staff_workload', coalesce(v_staff_workload, '[]'::jsonb),
+      'service_completion_time', coalesce(v_service_time, '[]'::jsonb),
+      'daily_trend', coalesce(v_daily_trend, '[]'::jsonb)
+    )
+  );
+end $$;
+
+-- Management RPCs
+create or replace function update_counter_config(
+  p_counter_id uuid,
+  p_status text,
+  p_service_id uuid default null,
+  p_assigned_staff uuid default null
+)
+returns boolean
+language plpgsql security definer set search_path = public as $$
+begin
+  if current_role_name() not in ('manager', 'admin') then
+    raise exception 'Unauthorized';
+  end if;
+
+  update counters
+  set status = coalesce(p_status, status),
+      service_id = p_service_id,
+      assigned_staff = p_assigned_staff
+  where id = p_counter_id;
+
+  insert into activity_logs (actor, action, entity, entity_id)
+  values (auth.uid(), 'update_counter_config', 'counters', p_counter_id);
+
+  return true;
+end $$;
+
+create or replace function update_service_config(
+  p_service_id uuid,
+  p_avg_duration int,
+  p_active boolean
+)
+returns boolean
+language plpgsql security definer set search_path = public as $$
+begin
+  if current_role_name() not in ('manager', 'admin') then
+    raise exception 'Unauthorized';
+  end if;
+
+  update services
+  set avg_duration = p_avg_duration,
+      active = p_active
+  where id = p_service_id;
+
+  insert into activity_logs (actor, action, entity, entity_id)
+  values (auth.uid(), 'update_service_config', 'services', p_service_id);
+
+  return true;
+end $$;
+
+create or replace function update_department_config(
+  p_dept_id uuid,
+  p_open_time time,
+  p_close_time time,
+  p_slot_minutes int,
+  p_max_per_slot int
+)
+returns boolean
+language plpgsql security definer set search_path = public as $$
+begin
+  if current_role_name() not in ('manager', 'admin') then
+    raise exception 'Unauthorized';
+  end if;
+
+  update departments
+  set open_time = p_open_time,
+      close_time = p_close_time,
+      slot_minutes = p_slot_minutes,
+      max_per_slot = p_max_per_slot
+  where id = p_dept_id;
+
+  insert into activity_logs (actor, action, entity, entity_id)
+  values (auth.uid(), 'update_department_config', 'departments', p_dept_id);
+
+  return true;
+end $$;
+
+grant execute on function get_dashboard_stats(timestamptz, timestamptz) to authenticated, anon;
+grant execute on function update_counter_config(uuid, text, uuid, uuid) to authenticated;
+grant execute on function update_service_config(uuid, int, boolean) to authenticated;
+grant execute on function update_department_config(uuid, time, time, int, int) to authenticated;
+
+
 
