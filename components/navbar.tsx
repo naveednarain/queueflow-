@@ -21,6 +21,7 @@ import {
 } from 'lucide-react'
 import type { Profile } from '@/lib/types'
 import { logout } from '@/lib/actions/auth'
+import NotificationBell from './notification-bell'
 
 interface NavbarProps {
   profile: Profile | null
@@ -171,12 +172,7 @@ export default function Navbar({ profile }: NavbarProps) {
           <div className="flex items-center gap-3">
             {profile ? (
               <>
-                <button
-                  aria-label="Notifications"
-                  className="relative w-9 h-9 rounded-lg bg-gray-100 flex items-center justify-center text-gray-600 hover:bg-gray-200 transition-colors"
-                >
-                  <Bell className="w-4 h-4" />
-                </button>
+                <NotificationBell userId={profile.id} />
                 <div className="hidden sm:flex items-center gap-2">
                   <div className="w-8 h-8 rounded-full bg-[#22C55E]/10 flex items-center justify-center text-[#22C55E] font-semibold text-sm">
                     {(profile.name ?? profile.email ?? 'U')[0].toUpperCase()}

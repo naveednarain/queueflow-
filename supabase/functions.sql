@@ -154,6 +154,25 @@ begin
      set queue_position = o.pos,
          estimated_wait = ceil(o.pos::numeric * v_avg / greatest(v_active, 1))::int
     from ordered o where t.id = o.id;
+
+  -- Notify waiting users who just reached position <= 2 (if not already notified)
+  insert into notifications (user_id, message, type)
+  select
+    t.user_id,
+    'Your token ' || t.token_number || ' is almost up! You are position #' || t.queue_position || ' in queue.',
+    'queue_close'
+  from tokens t
+  where t.service_id = p_service
+    and t.status in ('waiting', 'recalled')
+    and t.queue_position is not null
+    and t.queue_position <= 2
+    and t.user_id is not null
+    and not exists (
+      select 1 from notifications n
+      where n.user_id = t.user_id
+        and n.type = 'queue_close'
+        and n.message like '%' || t.token_number || '%'
+    );
 end $$;
 
 -- ─────────────────────────────────────────────
@@ -275,6 +294,18 @@ begin
 end $$;
 
 grant execute on function mark_notification_read(uuid) to authenticated;
+
+create or replace function mark_all_notifications_read()
+returns void
+language plpgsql security definer set search_path = public as $$
+begin
+  update notifications
+     set read = true
+   where user_id = auth.uid()
+     and read = false;
+end $$;
+
+grant execute on function mark_all_notifications_read() to authenticated;
 
 -- ============================================================
 -- PHASE 3: Staff Workflow Functions
@@ -1567,6 +1598,131 @@ grant execute on function get_dashboard_stats(timestamptz, timestamptz) to authe
 grant execute on function update_counter_config(uuid, text, uuid, uuid) to authenticated;
 grant execute on function update_service_config(uuid, int, boolean) to authenticated;
 grant execute on function update_department_config(uuid, time, time, int, int) to authenticated;
+
+-- ============================================================
+-- Phase 7: Notifications & Admin Rules Control
+-- ============================================================
+
+create policy "admin manage profiles" on profiles for all using (current_role_name() = 'admin');
+
+create or replace function send_reminders()
+returns int
+language plpgsql security definer set search_path = public as $$
+declare
+  v_count int := 0;
+  r record;
+begin
+  -- 1. Appointment approaching (within the next 60 minutes today)
+  for r in
+    select a.id, a.user_id, s.name as service_name, a.start_time
+    from appointments a
+    join services s on s.id = a.service_id
+    where a.appointment_date = current_date
+      and a.status in ('confirmed', 'booked')
+      and a.start_time >= current_time
+      and a.start_time <= (current_time + interval '60 minutes')
+      and not exists (
+        select 1 from notifications n
+        where n.user_id = a.user_id
+          and n.type = 'appointment_approaching'
+          and n.message like '%' || to_char(a.start_time, 'HH12:MI AM') || '%'
+          and n.created_at >= current_date::timestamptz
+      )
+  loop
+    insert into notifications (user_id, message, type)
+    values (
+      r.user_id,
+      'Reminder: Your appointment for ' || r.service_name || ' is coming up at ' || to_char(r.start_time, 'HH12:MI AM') || ' (within 1 hour).',
+      'appointment_approaching'
+    );
+    v_count := v_count + 1;
+  end loop;
+
+  -- 2. Queue position getting close (position <= 2)
+  for r in
+    select t.id, t.user_id, t.token_number, t.queue_position, s.name as service_name
+    from tokens t
+    join services s on s.id = t.service_id
+    where t.status in ('waiting', 'recalled')
+      and t.queue_position is not null
+      and t.queue_position <= 2
+      and not exists (
+        select 1 from notifications n
+        where n.user_id = t.user_id
+          and n.type = 'queue_close'
+          and n.message like '%' || t.token_number || '%'
+          and n.created_at >= (now() - interval '30 minutes')
+      )
+  loop
+    insert into notifications (user_id, message, type)
+    values (
+      r.user_id,
+      'Get ready! Token ' || r.token_number || ' is next in line (Position ' || r.queue_position || ' in ' || r.service_name || ').',
+      'queue_close'
+    );
+    v_count := v_count + 1;
+  end loop;
+
+  return v_count;
+end $$;
+
+create or replace function admin_update_user_role(
+  p_user_id uuid,
+  p_role user_role,
+  p_status text default 'active'
+)
+returns boolean
+language plpgsql security definer set search_path = public as $$
+begin
+  if current_role_name() <> 'admin' then
+    raise exception 'Unauthorized: Admin role required';
+  end if;
+
+  update profiles
+  set role = p_role,
+      account_status = coalesce(p_status, account_status)
+  where id = p_user_id;
+
+  insert into activity_logs (actor, action, entity, entity_id)
+  values (auth.uid(), 'update_user_role_to_' || p_role::text, 'profiles', p_user_id);
+
+  return true;
+end $$;
+
+create or replace function admin_update_rules(
+  p_dept_id uuid,
+  p_max_appts int,
+  p_max_tokens int,
+  p_cancel_limit int,
+  p_late_min int,
+  p_early_min int
+)
+returns boolean
+language plpgsql security definer set search_path = public as $$
+begin
+  if current_role_name() not in ('manager', 'admin') then
+    raise exception 'Unauthorized: Manager or Admin role required';
+  end if;
+
+  insert into rules (department_id, max_appts_per_user_day, max_active_tokens, cancel_limit, late_checkin_minutes, early_checkin_minutes)
+  values (p_dept_id, p_max_appts, p_max_tokens, p_cancel_limit, p_late_min, p_early_min)
+  on conflict (department_id) do update
+  set max_appts_per_user_day = p_max_appts,
+      max_active_tokens = p_max_tokens,
+      cancel_limit = p_cancel_limit,
+      late_checkin_minutes = p_late_min,
+      early_checkin_minutes = p_early_min;
+
+  insert into activity_logs (actor, action, entity, entity_id)
+  values (auth.uid(), 'update_rules', 'rules', p_dept_id);
+
+  return true;
+end $$;
+
+grant execute on function send_reminders() to authenticated, anon;
+grant execute on function admin_update_user_role(uuid, user_role, text) to authenticated;
+grant execute on function admin_update_rules(uuid, int, int, int, int, int) to authenticated;
+
 
 
 

@@ -147,3 +147,8 @@ export async function markNotificationRead(notificationId: string) {
     p_notification: notificationId,
   })
 }
+
+export async function markAllNotificationsRead() {
+  const supabase = await createClient()
+  await supabase.rpc('mark_all_notifications_read')
+}
