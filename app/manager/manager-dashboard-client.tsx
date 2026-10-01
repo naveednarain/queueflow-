@@ -40,6 +40,7 @@ import {
 } from 'recharts'
 import { toast } from 'sonner'
 import BackButton from '@/components/back-button'
+import AiInsightsCard from '@/components/ai-insights-card'
 import {
   fetchDashboardStats,
   saveCounterConfig,
@@ -325,6 +326,12 @@ export default function ManagerDashboardClient({
       {/* ── TAB 1: ANALYTICS & STAT CARDS ──────────────────────────── */}
       {activeTab === 'analytics' && (
         <div className="space-y-8 animate-in fade-in duration-300">
+          {/* ── AI Insights & Smart Staff Recommendation (Phase 8) ────── */}
+          <AiInsightsCard
+            activeCountersCount={summary ? summary.active_counters : 4}
+            avgServiceDuration={summary ? summary.avg_service_minutes : 10}
+          />
+
           {/* ── Top 11 Stat Cards (Task 2) ─────────────────────────── */}
           <div>
             <h2 className="text-sm font-bold uppercase tracking-wider text-gray-500 mb-4 flex items-center gap-2">

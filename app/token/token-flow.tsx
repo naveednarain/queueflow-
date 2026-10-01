@@ -11,6 +11,7 @@ import {
   ChevronDown,
   MapPin,
   ArrowRight,
+  Sparkles,
 } from 'lucide-react'
 import { createToken } from '@/lib/actions/token'
 import type { DepartmentGroup, Token } from '@/lib/types'
@@ -300,12 +301,19 @@ function TokenResultCard({
             </span>
             <span className="text-xs text-gray-500 text-center">People ahead</span>
           </div>
-          <div className="flex flex-col items-center gap-1 bg-[#F5F5F5] rounded-xl p-4">
-            <Clock className="w-5 h-5 text-[#22C55E]" />
+          <div
+            className="flex flex-col items-center gap-1 bg-emerald-50/40 rounded-xl p-4 border border-emerald-100/80 cursor-help"
+            title="AI-estimated wait based on 20 recent services and live counter throughput"
+          >
+            <div className="flex items-center gap-1 text-[#16A34A]">
+              <Sparkles className="w-3.5 h-3.5" />
+              <span className="text-[10px] font-bold uppercase tracking-wider">AI Estimate</span>
+            </div>
             <span className="text-2xl font-bold text-gray-900">
               {token.estimated_wait != null ? `${token.estimated_wait}` : '—'}
             </span>
-            <span className="text-xs text-gray-500 text-center">Est. wait (min)</span>
+            <span className="text-xs text-gray-600 text-center font-medium">AI-estimated wait (min)</span>
+            <span className="text-[10px] text-gray-400">based on 20 recent services</span>
           </div>
         </div>
 
