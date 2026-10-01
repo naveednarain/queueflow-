@@ -2,6 +2,7 @@
 
 import { createClient } from '@/lib/supabase/server'
 import { revalidatePath } from 'next/cache'
+import { z } from 'zod'
 
 export interface AdminUserItem {
   id: string
@@ -199,22 +200,68 @@ export async function getAdminData(): Promise<AdminData> {
   }
 }
 
+const uuidSchema = z.string().uuid()
+const userRoleSchema = z.enum(['customer', 'staff', 'manager', 'admin'])
+
+const departmentSchema = z.object({
+  name: z.string().min(2, 'Name must be at least 2 characters').max(80, 'Name must be 80 characters or less'),
+  openTime: z.string().min(4).max(8),
+  closeTime: z.string().min(4).max(8),
+  slotMinutes: z.number().int().min(5).max(120),
+  maxPerSlot: z.number().int().min(1).max(50),
+})
+
+const serviceSchema = z.object({
+  name: z.string().min(2, 'Name must be at least 2 characters').max(80, 'Name must be 80 characters or less'),
+  prefix: z.string().min(1, 'Prefix must be at least 1 character').max(5, 'Prefix must be 5 characters or less'),
+  avgDuration: z.number().int().min(1).max(180),
+  priorityLevel: z.number().int().min(0).max(10),
+  active: z.boolean(),
+})
+
+const rulesSchema = z.object({
+  deptId: z.string().uuid(),
+  maxAppts: z.number().int().min(1).max(20),
+  maxTokens: z.number().int().min(1).max(10),
+  cancelLimit: z.number().int().min(1).max(20),
+  lateMin: z.number().int().min(1).max(60),
+  earlyMin: z.number().int().min(1).max(60),
+})
+
+function sanitizeAdminError(msg?: string): string {
+  if (!msg) return 'Operation failed. Please try again.'
+  if (
+    msg.includes('Unauthorized') ||
+    msg.includes('not found') ||
+    msg.includes('already exists')
+  ) {
+    return msg
+  }
+  return 'A temporary administrative error occurred. Please try again.'
+}
+
 export async function updateUserRole(
   userId: string,
   role: 'customer' | 'staff' | 'manager' | 'admin',
   status: string = 'active'
 ): Promise<{ success: boolean; error: string | null }> {
+  const parsedId = uuidSchema.safeParse(userId)
+  const parsedRole = userRoleSchema.safeParse(role)
+  if (!parsedId.success || !parsedRole.success) {
+    return { success: false, error: 'Invalid user ID or role parameter.' }
+  }
+
   try {
     const supabase = await createClient()
 
     const { error } = await supabase.rpc('admin_update_user_role', {
-      p_user_id: userId,
-      p_role: role,
-      p_status: status,
+      p_user_id: parsedId.data,
+      p_role: parsedRole.data,
+      p_status: status.slice(0, 20),
     })
 
     if (error) {
-      return { success: false, error: error.message }
+      return { success: false, error: sanitizeAdminError(error.message) }
     }
 
     revalidatePath('/admin')
@@ -222,7 +269,7 @@ export async function updateUserRole(
     revalidatePath('/manager')
     return { success: true, error: null }
   } catch (err: any) {
-    return { success: false, error: err.message || 'Failed to update user role' }
+    return { success: false, error: sanitizeAdminError(err.message) }
   }
 }
 
@@ -234,20 +281,32 @@ export async function updateDepartmentRules(
   lateMin: number,
   earlyMin: number
 ): Promise<{ success: boolean; error: string | null }> {
+  const parsed = rulesSchema.safeParse({
+    deptId,
+    maxAppts,
+    maxTokens,
+    cancelLimit,
+    lateMin,
+    earlyMin,
+  })
+  if (!parsed.success) {
+    return { success: false, error: parsed.error.issues[0].message }
+  }
+
   try {
     const supabase = await createClient()
 
     const { error } = await supabase.rpc('admin_update_rules', {
-      p_dept_id: deptId,
-      p_max_appts: maxAppts,
-      p_max_tokens: maxTokens,
-      p_cancel_limit: cancelLimit,
-      p_late_min: lateMin,
-      p_early_min: earlyMin,
+      p_dept_id: parsed.data.deptId,
+      p_max_appts: parsed.data.maxAppts,
+      p_max_tokens: parsed.data.maxTokens,
+      p_cancel_limit: parsed.data.cancelLimit,
+      p_late_min: parsed.data.lateMin,
+      p_early_min: parsed.data.earlyMin,
     })
 
     if (error) {
-      return { success: false, error: error.message }
+      return { success: false, error: sanitizeAdminError(error.message) }
     }
 
     revalidatePath('/admin')
@@ -255,7 +314,7 @@ export async function updateDepartmentRules(
     revalidatePath('/book')
     return { success: true, error: null }
   } catch (err: any) {
-    return { success: false, error: err.message || 'Failed to update department rules' }
+    return { success: false, error: sanitizeAdminError(err.message) }
   }
 }
 
@@ -266,23 +325,34 @@ export async function createDepartment(
   slotMinutes: number,
   maxPerSlot: number
 ): Promise<{ success: boolean; error: string | null }> {
+  const parsed = departmentSchema.safeParse({
+    name,
+    openTime,
+    closeTime,
+    slotMinutes,
+    maxPerSlot,
+  })
+  if (!parsed.success) {
+    return { success: false, error: parsed.error.issues[0].message }
+  }
+
   try {
     const supabase = await createClient()
 
     const { data: dept, error } = await supabase
       .from('departments')
       .insert({
-        name,
-        open_time: openTime,
-        close_time: closeTime,
-        slot_minutes: slotMinutes,
-        max_per_slot: maxPerSlot,
+        name: parsed.data.name,
+        open_time: parsed.data.openTime,
+        close_time: parsed.data.closeTime,
+        slot_minutes: parsed.data.slotMinutes,
+        max_per_slot: parsed.data.maxPerSlot,
       })
       .select('id')
       .single()
 
     if (error) {
-      return { success: false, error: error.message }
+      return { success: false, error: sanitizeAdminError(error.message) }
     }
 
     // Initialize default rules for the new department
@@ -302,7 +372,7 @@ export async function createDepartment(
     revalidatePath('/token')
     return { success: true, error: null }
   } catch (err: any) {
-    return { success: false, error: err.message || 'Failed to create department' }
+    return { success: false, error: sanitizeAdminError(err.message) }
   }
 }
 
@@ -314,22 +384,34 @@ export async function updateDepartment(
   slotMinutes: number,
   maxPerSlot: number
 ): Promise<{ success: boolean; error: string | null }> {
+  const parsedId = uuidSchema.safeParse(id)
+  const parsed = departmentSchema.safeParse({
+    name,
+    openTime,
+    closeTime,
+    slotMinutes,
+    maxPerSlot,
+  })
+  if (!parsedId.success || !parsed.success) {
+    return { success: false, error: 'Invalid department data provided.' }
+  }
+
   try {
     const supabase = await createClient()
 
     const { error } = await supabase
       .from('departments')
       .update({
-        name,
-        open_time: openTime,
-        close_time: closeTime,
-        slot_minutes: slotMinutes,
-        max_per_slot: maxPerSlot,
+        name: parsed.data.name,
+        open_time: parsed.data.openTime,
+        close_time: parsed.data.closeTime,
+        slot_minutes: parsed.data.slotMinutes,
+        max_per_slot: parsed.data.maxPerSlot,
       })
-      .eq('id', id)
+      .eq('id', parsedId.data)
 
     if (error) {
-      return { success: false, error: error.message }
+      return { success: false, error: sanitizeAdminError(error.message) }
     }
 
     revalidatePath('/admin')
@@ -337,20 +419,25 @@ export async function updateDepartment(
     revalidatePath('/book')
     return { success: true, error: null }
   } catch (err: any) {
-    return { success: false, error: err.message || 'Failed to update department' }
+    return { success: false, error: sanitizeAdminError(err.message) }
   }
 }
 
 export async function deleteDepartment(
   id: string
 ): Promise<{ success: boolean; error: string | null }> {
+  const parsedId = uuidSchema.safeParse(id)
+  if (!parsedId.success) {
+    return { success: false, error: 'Invalid department ID.' }
+  }
+
   try {
     const supabase = await createClient()
 
-    const { error } = await supabase.from('departments').delete().eq('id', id)
+    const { error } = await supabase.from('departments').delete().eq('id', parsedId.data)
 
     if (error) {
-      return { success: false, error: error.message }
+      return { success: false, error: sanitizeAdminError(error.message) }
     }
 
     revalidatePath('/admin')
@@ -359,7 +446,7 @@ export async function deleteDepartment(
     revalidatePath('/token')
     return { success: true, error: null }
   } catch (err: any) {
-    return { success: false, error: err.message || 'Failed to delete department' }
+    return { success: false, error: sanitizeAdminError(err.message) }
   }
 }
 
@@ -371,20 +458,32 @@ export async function createService(
   priorityLevel: number,
   active: boolean
 ): Promise<{ success: boolean; error: string | null }> {
+  const parsedDeptId = uuidSchema.safeParse(departmentId)
+  const parsed = serviceSchema.safeParse({
+    name,
+    prefix,
+    avgDuration,
+    priorityLevel,
+    active,
+  })
+  if (!parsedDeptId.success || !parsed.success) {
+    return { success: false, error: 'Invalid service data provided.' }
+  }
+
   try {
     const supabase = await createClient()
 
     const { error } = await supabase.from('services').insert({
-      department_id: departmentId,
-      name,
-      prefix: prefix.toUpperCase().slice(0, 1),
-      avg_duration: avgDuration,
-      priority_level: priorityLevel,
-      active,
+      department_id: parsedDeptId.data,
+      name: parsed.data.name,
+      prefix: parsed.data.prefix.toUpperCase().slice(0, 1),
+      avg_duration: parsed.data.avgDuration,
+      priority_level: parsed.data.priorityLevel,
+      active: parsed.data.active,
     })
 
     if (error) {
-      return { success: false, error: error.message }
+      return { success: false, error: sanitizeAdminError(error.message) }
     }
 
     revalidatePath('/admin')
@@ -393,7 +492,7 @@ export async function createService(
     revalidatePath('/token')
     return { success: true, error: null }
   } catch (err: any) {
-    return { success: false, error: err.message || 'Failed to create service' }
+    return { success: false, error: sanitizeAdminError(err.message) }
   }
 }
 
@@ -405,22 +504,34 @@ export async function updateService(
   priorityLevel: number,
   active: boolean
 ): Promise<{ success: boolean; error: string | null }> {
+  const parsedId = uuidSchema.safeParse(id)
+  const parsed = serviceSchema.safeParse({
+    name,
+    prefix,
+    avgDuration,
+    priorityLevel,
+    active,
+  })
+  if (!parsedId.success || !parsed.success) {
+    return { success: false, error: 'Invalid service data provided.' }
+  }
+
   try {
     const supabase = await createClient()
 
     const { error } = await supabase
       .from('services')
       .update({
-        name,
-        prefix: prefix.toUpperCase().slice(0, 1),
-        avg_duration: avgDuration,
-        priority_level: priorityLevel,
-        active,
+        name: parsed.data.name,
+        prefix: parsed.data.prefix.toUpperCase().slice(0, 1),
+        avg_duration: parsed.data.avgDuration,
+        priority_level: parsed.data.priorityLevel,
+        active: parsed.data.active,
       })
-      .eq('id', id)
+      .eq('id', parsedId.data)
 
     if (error) {
-      return { success: false, error: error.message }
+      return { success: false, error: sanitizeAdminError(error.message) }
     }
 
     revalidatePath('/admin')
@@ -429,20 +540,25 @@ export async function updateService(
     revalidatePath('/token')
     return { success: true, error: null }
   } catch (err: any) {
-    return { success: false, error: err.message || 'Failed to update service' }
+    return { success: false, error: sanitizeAdminError(err.message) }
   }
 }
 
 export async function deleteService(
   id: string
 ): Promise<{ success: boolean; error: string | null }> {
+  const parsedId = uuidSchema.safeParse(id)
+  if (!parsedId.success) {
+    return { success: false, error: 'Invalid service ID.' }
+  }
+
   try {
     const supabase = await createClient()
 
-    const { error } = await supabase.from('services').delete().eq('id', id)
+    const { error } = await supabase.from('services').delete().eq('id', parsedId.data)
 
     if (error) {
-      return { success: false, error: error.message }
+      return { success: false, error: sanitizeAdminError(error.message) }
     }
 
     revalidatePath('/admin')

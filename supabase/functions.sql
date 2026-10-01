@@ -36,6 +36,25 @@ create policy "own profile update"
   using (id = auth.uid())
   with check (id = auth.uid() and role = (select role from profiles where id = auth.uid()));
 
+-- Enforce that non-admins cannot change roles via update
+create or replace function prevent_self_role_escalation()
+returns trigger
+language plpgsql security definer set search_path = public as $$
+begin
+  if new.role is distinct from old.role then
+    if current_role_name() <> 'admin' then
+      raise exception 'Unauthorized: Only administrators can modify user roles';
+    end if;
+  end if;
+  return new;
+end;
+$$;
+
+drop trigger if exists trg_prevent_self_role_escalation on profiles;
+create trigger trg_prevent_self_role_escalation
+before update on profiles
+for each row execute function prevent_self_role_escalation();
+
 -- departments (public read)
 create policy "read departments"
   on departments for select using (true);

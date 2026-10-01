@@ -2,6 +2,9 @@
 
 import { createClient } from '@/lib/supabase/server'
 import type { Token, DepartmentWithService, DepartmentGroup } from '@/lib/types'
+import { z } from 'zod'
+
+const uuidSchema = z.string().uuid()
 
 export async function getServicesGrouped(): Promise<DepartmentGroup[]> {
   const supabase = await createClient()
@@ -62,6 +65,11 @@ export async function getServicesGrouped(): Promise<DepartmentGroup[]> {
 export async function createToken(
   serviceId: string
 ): Promise<{ data: Token | null; error: string | null }> {
+  const parsed = uuidSchema.safeParse(serviceId)
+  if (!parsed.success) {
+    return { data: null, error: 'Invalid service selected.' }
+  }
+
   const supabase = await createClient()
 
   const {
@@ -73,13 +81,13 @@ export async function createToken(
   }
 
   const { data, error } = await supabase.rpc('create_token', {
-    p_service: serviceId,
+    p_service: parsed.data,
   })
 
   if (error) {
     // Extract friendly message from Postgres exception
     const msg = error.message ?? ''
-    if (msg.includes('already have an active token')) {
+    if (msg.includes('already have an active token') || msg.includes('maximum')) {
       return {
         data: null,
         error:
@@ -100,12 +108,15 @@ export async function createToken(
 export async function getActiveToken(
   userId: string
 ): Promise<Token | null> {
+  const parsed = uuidSchema.safeParse(userId)
+  if (!parsed.success) return null
+
   const supabase = await createClient()
 
   const { data } = await supabase
     .from('tokens')
     .select('*')
-    .eq('user_id', userId)
+    .eq('user_id', parsed.data)
     .in('status', ['waiting', 'called', 'recalled', 'in_service'])
     .order('created_at', { ascending: false })
     .limit(1)
@@ -115,12 +126,15 @@ export async function getActiveToken(
 }
 
 export async function getTokenHistory(userId: string): Promise<Token[]> {
+  const parsed = uuidSchema.safeParse(userId)
+  if (!parsed.success) return []
+
   const supabase = await createClient()
 
   const { data } = await supabase
     .from('tokens')
     .select('*, services(name, prefix), counters(name)')
-    .eq('user_id', userId)
+    .eq('user_id', parsed.data)
     .in('status', ['completed', 'skipped', 'missed', 'called'])
     .order('created_at', { ascending: false })
     .limit(20)
@@ -129,12 +143,15 @@ export async function getTokenHistory(userId: string): Promise<Token[]> {
 }
 
 export async function getUserNotifications(userId: string) {
+  const parsed = uuidSchema.safeParse(userId)
+  if (!parsed.success) return []
+
   const supabase = await createClient()
 
   const { data } = await supabase
     .from('notifications')
     .select('*')
-    .eq('user_id', userId)
+    .eq('user_id', parsed.data)
     .order('created_at', { ascending: false })
     .limit(30)
 
@@ -142,9 +159,12 @@ export async function getUserNotifications(userId: string) {
 }
 
 export async function markNotificationRead(notificationId: string) {
+  const parsed = uuidSchema.safeParse(notificationId)
+  if (!parsed.success) return
+
   const supabase = await createClient()
   await supabase.rpc('mark_notification_read', {
-    p_notification: notificationId,
+    p_notification: parsed.data,
   })
 }
 

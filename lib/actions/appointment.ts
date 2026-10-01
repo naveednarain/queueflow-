@@ -3,16 +3,50 @@
 import { createClient } from '@/lib/supabase/server'
 import type { Appointment, AppointmentWithDetails, TimeSlot, Token } from '@/lib/types'
 import { revalidatePath } from 'next/cache'
+import { z } from 'zod'
+
+const bookSchema = z.object({
+  serviceId: z.string().uuid('Invalid service selected'),
+  date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Invalid date format'),
+  startTime: z.string().min(4).max(10),
+})
+
+const uuidSchema = z.string().uuid('Invalid record ID')
+
+function sanitizeErrorMessage(msg?: string): string {
+  if (!msg) return 'Operation failed. Please try again.'
+  if (
+    msg.includes('already full') ||
+    msg.includes('past') ||
+    msg.includes('already have') ||
+    msg.includes('working hours') ||
+    msg.includes('break time') ||
+    msg.includes('maximum') ||
+    msg.includes('window') ||
+    msg.includes('Unauthorized') ||
+    msg.includes('authenticated')
+  ) {
+    return msg
+  }
+  return 'A temporary system error occurred. Please try again.'
+}
 
 export async function getAvailableSlots(
   serviceId: string,
   date: string
 ): Promise<TimeSlot[]> {
+  const parsed = z.object({
+    serviceId: z.string().uuid(),
+    date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+  }).safeParse({ serviceId, date })
+
+  if (!parsed.success) return []
+
   const supabase = await createClient()
 
   const { data, error } = await supabase.rpc('get_available_slots', {
-    p_service: serviceId,
-    p_date: date,
+    p_service: parsed.data.serviceId,
+    p_date: parsed.data.date,
   })
 
   if (error || !data) {
@@ -33,16 +67,21 @@ export async function bookAppointment(
   date: string,
   startTime: string
 ): Promise<{ data: Appointment | null; error: string | null }> {
+  const parsed = bookSchema.safeParse({ serviceId, date, startTime })
+  if (!parsed.success) {
+    return { data: null, error: parsed.error.issues[0].message }
+  }
+
   const supabase = await createClient()
 
   const { data, error } = await supabase.rpc('book_appointment', {
-    p_service: serviceId,
-    p_date: date,
-    p_start: startTime,
+    p_service: parsed.data.serviceId,
+    p_date: parsed.data.date,
+    p_start: parsed.data.startTime,
   })
 
   if (error) {
-    return { data: null, error: error.message }
+    return { data: null, error: sanitizeErrorMessage(error.message) }
   }
 
   const appt = Array.isArray(data) ? data[0] : data
@@ -54,14 +93,19 @@ export async function bookAppointment(
 export async function checkInAppointment(
   appointmentId: string
 ): Promise<{ token: Token | null; error: string | null }> {
+  const parsed = uuidSchema.safeParse(appointmentId)
+  if (!parsed.success) {
+    return { token: null, error: 'Invalid appointment ID' }
+  }
+
   const supabase = await createClient()
 
   const { data, error } = await supabase.rpc('check_in', {
-    p_appointment: appointmentId,
+    p_appointment: parsed.data,
   })
 
   if (error) {
-    return { token: null, error: error.message }
+    return { token: null, error: sanitizeErrorMessage(error.message) }
   }
 
   const token = Array.isArray(data) ? data[0] : data
@@ -74,14 +118,19 @@ export async function checkInAppointment(
 export async function cancelAppointment(
   appointmentId: string
 ): Promise<{ success: boolean; error: string | null }> {
+  const parsed = uuidSchema.safeParse(appointmentId)
+  if (!parsed.success) {
+    return { success: false, error: 'Invalid appointment ID' }
+  }
+
   const supabase = await createClient()
 
   const { error } = await supabase.rpc('cancel_appointment', {
-    p_appointment: appointmentId,
+    p_appointment: parsed.data,
   })
 
   if (error) {
-    return { success: false, error: error.message }
+    return { success: false, error: sanitizeErrorMessage(error.message) }
   }
 
   revalidatePath('/my')
@@ -94,16 +143,26 @@ export async function rescheduleAppointment(
   date: string,
   startTime: string
 ): Promise<{ data: Appointment | null; error: string | null }> {
+  const parsed = z.object({
+    appointmentId: z.string().uuid('Invalid appointment ID'),
+    date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Invalid date format'),
+    startTime: z.string().min(4).max(10),
+  }).safeParse({ appointmentId, date, startTime })
+
+  if (!parsed.success) {
+    return { data: null, error: parsed.error.issues[0].message }
+  }
+
   const supabase = await createClient()
 
   const { data, error } = await supabase.rpc('reschedule_appointment', {
-    p_appointment: appointmentId,
-    p_date: date,
-    p_start: startTime,
+    p_appointment: parsed.data.appointmentId,
+    p_date: parsed.data.date,
+    p_start: parsed.data.startTime,
   })
 
   if (error) {
-    return { data: null, error: error.message }
+    return { data: null, error: sanitizeErrorMessage(error.message) }
   }
 
   const appt = Array.isArray(data) ? data[0] : data
@@ -115,6 +174,9 @@ export async function rescheduleAppointment(
 export async function getUserAppointments(
   userId: string
 ): Promise<AppointmentWithDetails[]> {
+  const parsed = uuidSchema.safeParse(userId)
+  if (!parsed.success) return []
+
   const supabase = await createClient()
 
   // Run lazy maintenance check for missed appointments
@@ -141,7 +203,7 @@ export async function getUserAppointments(
         status
       )
     `)
-    .eq('user_id', userId)
+    .eq('user_id', parsed.data)
     .order('appointment_date', { ascending: false })
     .order('start_time', { ascending: false })
 

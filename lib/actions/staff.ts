@@ -3,6 +3,7 @@
 import { createClient } from '@/lib/supabase/server'
 import type { StaffCounter, StaffQueueItem, Token, DisplayCounterItem } from '@/lib/types'
 import { revalidatePath } from 'next/cache'
+import { z } from 'zod'
 
 export async function getCounters(): Promise<StaffCounter[]> {
   const supabase = await createClient()
@@ -130,19 +131,41 @@ export async function getCounterDetails(counterId: string): Promise<StaffCounter
   }
 }
 
+const uuidSchema = z.string().uuid()
+const statusSchema = z.enum(['available', 'busy', 'break', 'closed'])
+
+function sanitizeStaffError(msg?: string): string {
+  if (!msg) return 'Operation failed. Please try again.'
+  if (
+    msg.includes('already has an active token') ||
+    msg.includes('Unauthorized') ||
+    msg.includes('not found') ||
+    msg.includes('No waiting tokens')
+  ) {
+    return msg
+  }
+  return 'A temporary system error occurred. Please try again.'
+}
+
 export async function setCounterStatus(
   counterId: string,
   status: 'available' | 'busy' | 'break' | 'closed'
 ): Promise<{ success: boolean; error: string | null }> {
+  const parsedId = uuidSchema.safeParse(counterId)
+  const parsedStatus = statusSchema.safeParse(status)
+  if (!parsedId.success || !parsedStatus.success) {
+    return { success: false, error: 'Invalid counter status or ID.' }
+  }
+
   const supabase = await createClient()
 
   const { error } = await supabase.rpc('set_counter_status', {
-    p_counter: counterId,
-    p_status: status,
+    p_counter: parsedId.data,
+    p_status: parsedStatus.data,
   })
 
   if (error) {
-    return { success: false, error: error.message }
+    return { success: false, error: sanitizeStaffError(error.message) }
   }
 
   revalidatePath('/staff')
@@ -153,14 +176,19 @@ export async function setCounterStatus(
 export async function callNextToken(
   counterId: string
 ): Promise<{ token: Token | null; error: string | null }> {
+  const parsedId = uuidSchema.safeParse(counterId)
+  if (!parsedId.success) {
+    return { token: null, error: 'Invalid counter ID.' }
+  }
+
   const supabase = await createClient()
 
   const { data, error } = await supabase.rpc('call_next_token', {
-    p_counter: counterId,
+    p_counter: parsedId.data,
   })
 
   if (error) {
-    return { token: null, error: error.message }
+    return { token: null, error: sanitizeStaffError(error.message) }
   }
 
   const token = Array.isArray(data) ? data[0] : data
@@ -176,14 +204,19 @@ export async function callNextToken(
 export async function startService(
   tokenId: string
 ): Promise<{ success: boolean; error: string | null }> {
+  const parsedId = uuidSchema.safeParse(tokenId)
+  if (!parsedId.success) {
+    return { success: false, error: 'Invalid token ID.' }
+  }
+
   const supabase = await createClient()
 
   const { error } = await supabase.rpc('start_service', {
-    p_token: tokenId,
+    p_token: parsedId.data,
   })
 
   if (error) {
-    return { success: false, error: error.message }
+    return { success: false, error: sanitizeStaffError(error.message) }
   }
 
   revalidatePath('/staff')
@@ -194,14 +227,19 @@ export async function startService(
 export async function completeService(
   tokenId: string
 ): Promise<{ success: boolean; error: string | null }> {
+  const parsedId = uuidSchema.safeParse(tokenId)
+  if (!parsedId.success) {
+    return { success: false, error: 'Invalid token ID.' }
+  }
+
   const supabase = await createClient()
 
   const { error } = await supabase.rpc('complete_service', {
-    p_token: tokenId,
+    p_token: parsedId.data,
   })
 
   if (error) {
-    return { success: false, error: error.message }
+    return { success: false, error: sanitizeStaffError(error.message) }
   }
 
   revalidatePath('/staff')
@@ -212,14 +250,19 @@ export async function completeService(
 export async function recallToken(
   tokenId: string
 ): Promise<{ success: boolean; error: string | null }> {
+  const parsedId = uuidSchema.safeParse(tokenId)
+  if (!parsedId.success) {
+    return { success: false, error: 'Invalid token ID.' }
+  }
+
   const supabase = await createClient()
 
   const { error } = await supabase.rpc('recall_token', {
-    p_token: tokenId,
+    p_token: parsedId.data,
   })
 
   if (error) {
-    return { success: false, error: error.message }
+    return { success: false, error: sanitizeStaffError(error.message) }
   }
 
   revalidatePath('/staff')
@@ -230,14 +273,19 @@ export async function recallToken(
 export async function skipToken(
   tokenId: string
 ): Promise<{ success: boolean; error: string | null }> {
+  const parsedId = uuidSchema.safeParse(tokenId)
+  if (!parsedId.success) {
+    return { success: false, error: 'Invalid token ID.' }
+  }
+
   const supabase = await createClient()
 
   const { error } = await supabase.rpc('skip_token', {
-    p_token: tokenId,
+    p_token: parsedId.data,
   })
 
   if (error) {
-    return { success: false, error: error.message }
+    return { success: false, error: sanitizeStaffError(error.message) }
   }
 
   revalidatePath('/staff')
@@ -248,14 +296,19 @@ export async function skipToken(
 export async function markTokenMissed(
   tokenId: string
 ): Promise<{ success: boolean; error: string | null }> {
+  const parsedId = uuidSchema.safeParse(tokenId)
+  if (!parsedId.success) {
+    return { success: false, error: 'Invalid token ID.' }
+  }
+
   const supabase = await createClient()
 
   const { error } = await supabase.rpc('mark_token_missed', {
-    p_token: tokenId,
+    p_token: parsedId.data,
   })
 
   if (error) {
-    return { success: false, error: error.message }
+    return { success: false, error: sanitizeStaffError(error.message) }
   }
 
   revalidatePath('/staff')
