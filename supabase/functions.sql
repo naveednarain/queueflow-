@@ -877,11 +877,11 @@ begin
     raise exception 'Cannot book appointments in the past';
   end if;
 
-  if p_date = current_date and p_start <= current_time then
+  if p_date = current_date and p_start <= localtime then
     raise exception 'Cannot book past time slots for today';
   end if;
 
-  v_end := p_start + (coalesce(v_service.avg_duration, 15) || ' minutes')::interval;
+  v_end := (p_start + (coalesce(v_service.avg_duration, 15) || ' minutes')::interval)::time;
 
   if p_start < v_dept.open_time or v_end > v_dept.close_time then
     raise exception 'Slot outside of working hours (% - %)', v_dept.open_time, v_dept.close_time;
@@ -937,10 +937,10 @@ begin
 
   -- Calculate AI no-show risk score
   v_risk := 0.10 + least(0.45, 0.15 * coalesce(v_profile.no_show_count, 0));
-  if p_date = current_date and extract(epoch from (p_start - current_time))/3600 < 2 then
+  if p_date = current_date and extract(epoch from (p_start - localtime))/3600 < 2 then
     v_risk := v_risk + 0.20;
   end if;
-  if p_start = v_dept.open_time or p_start >= (v_dept.close_time - interval '1 hour') then
+  if p_start = v_dept.open_time or p_start >= (v_dept.close_time - interval '1 hour')::time then
     v_risk := v_risk + 0.10;
   end if;
   v_risk := round(least(1.0, greatest(0.0, v_risk)), 2);
@@ -1226,7 +1226,7 @@ begin
         a.appointment_date < current_date
         or (
           a.appointment_date = current_date
-          and current_time > (a.start_time + (coalesce(rl.late_checkin_minutes, 10) || ' minutes')::interval)
+          and localtime > (a.start_time + (coalesce(rl.late_checkin_minutes, 10) || ' minutes')::interval)::time
         )
       )
   loop
@@ -1619,8 +1619,8 @@ begin
     join services s on s.id = a.service_id
     where a.appointment_date = current_date
       and a.status in ('confirmed', 'booked')
-      and a.start_time >= current_time
-      and a.start_time <= (current_time + interval '60 minutes')
+      and a.start_time >= localtime
+      and a.start_time <= (localtime + interval '60 minutes')::time
       and not exists (
         select 1 from notifications n
         where n.user_id = a.user_id
