@@ -25,12 +25,6 @@ export default function LoginForm() {
     }
   }
 
-  const handleSelectDemo = (demoEmail: string) => {
-    setEmail(demoEmail)
-    setPassword('Demo@12345')
-    toast.info(`Filled credentials for ${demoEmail}`)
-  }
-
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault()
     if (loading) return
@@ -160,44 +154,6 @@ export default function LoginForm() {
             Create one
           </Link>
         </p>
-
-        {/* Demo accounts hint with 1-click auto-fill */}
-        <div className="mt-6 pt-5 border-t border-gray-100">
-          <div className="flex items-center justify-between mb-2">
-            <span className="text-xs font-semibold text-gray-600">
-              Demo Accounts
-            </span>
-            <span className="text-[11px] text-[#22C55E] font-medium">Click to auto-fill</span>
-          </div>
-          <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 text-xs">
-            {[
-              { email: 'admin@demo.com', role: 'Admin' },
-              { email: 'manager@demo.com', role: 'Manager' },
-              { email: 'staff@demo.com', role: 'Staff 1' },
-              { email: 'staff2@demo.com', role: 'Staff 2' },
-              { email: 'customer@demo.com', role: 'Customer 1' },
-              { email: 'customer2@demo.com', role: 'Customer 2' },
-            ].map((d) => (
-              <button
-                type="button"
-                key={d.email}
-                onClick={() => handleSelectDemo(d.email)}
-                className="bg-gray-50 hover:bg-emerald-50 hover:border-emerald-200 border border-gray-200/80 rounded-xl p-2 text-left transition-all cursor-pointer group"
-                title={`Click to fill ${d.role} credentials`}
-              >
-                <div className="font-bold text-gray-800 group-hover:text-[#22C55E] text-xs leading-none">
-                  {d.role}
-                </div>
-                <div className="truncate text-[10px] text-gray-400 group-hover:text-gray-600 mt-1">
-                  {d.email}
-                </div>
-              </button>
-            ))}
-          </div>
-          <p className="text-[10px] text-gray-400 text-center mt-2.5">
-            Password: <strong className="text-gray-600 font-mono">Demo@12345</strong>
-          </p>
-        </div>
       </div>
     </div>
   )

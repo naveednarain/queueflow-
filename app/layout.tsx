@@ -3,6 +3,7 @@ import { Inter, Geist } from 'next/font/google'
 import './globals.css'
 import { Toaster } from '@/components/ui/sonner'
 import { cn } from "@/lib/utils";
+import AiAssistantWidget from '@/components/ai-assistant-widget'
 
 const geist = Geist({subsets:['latin'],variable:'--font-sans'});
 
@@ -27,6 +28,7 @@ export default function RootLayout({
     <html lang="en" className={cn("h-full", inter.variable, "font-sans", geist.variable)}>
       <body className="min-h-full font-sans antialiased bg-[#F5F5F5] text-gray-900">
         {children}
+        <AiAssistantWidget />
         <Toaster richColors position="top-right" />
       </body>
     </html>

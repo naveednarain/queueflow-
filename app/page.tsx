@@ -147,7 +147,7 @@ export default async function HomePage() {
 
       {/* Footer */}
       <footer className="border-t border-gray-200 py-6 text-center text-sm text-gray-400">
-        © {new Date().getFullYear()} QueueFlow — Built for the hackathon
+        © {new Date().getFullYear()} QueueFlow — Built by LahootiX
       </footer>
     </div>
   )
