@@ -251,7 +251,7 @@ export default function DisplayClient({ initialCounters, initialNextUp }: Props)
             : 'bg-white/90 border-gray-200/80 shadow-xs'
         }`}
       >
-        <div className="max-w-[1920px] mx-auto flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+        <div className="max-w-[1920px] mx-auto flex flex-wrap items-center justify-between gap-2 sm:gap-4">
           {/* Logo & Operational Status */}
           <div className="flex items-center gap-3.5">
             <BackButton
@@ -300,7 +300,7 @@ export default function DisplayClient({ initialCounters, initialNextUp }: Props)
           </div>
 
           {/* Center / Right: Live Digital Clock & Interactive Controls */}
-          <div className="flex items-center justify-between lg:justify-end gap-5">
+          <div className="flex items-center gap-3 sm:gap-5 flex-wrap">
             {/* Monospace Digital Clock */}
             <div
               className={`flex items-center gap-3 px-4 py-2 rounded-2xl border transition-colors ${
@@ -311,11 +311,11 @@ export default function DisplayClient({ initialCounters, initialNextUp }: Props)
             >
               <Clock className="w-5 h-5 text-[#22C55E] animate-pulse" />
               <div className="text-right">
-                <div className="text-2xl sm:text-3xl font-mono font-black tracking-wider text-gray-900 dark:text-emerald-400">
+                <div className="text-xl sm:text-3xl font-mono font-black tracking-wider text-gray-900 dark:text-emerald-400">
                   {currentTime || '--:--:--'}
                 </div>
                 <div
-                  className={`text-[11px] font-semibold uppercase tracking-wide ${
+                  className={`text-[11px] font-semibold uppercase tracking-wide hidden sm:block ${
                     isDarkMode ? 'text-slate-400' : 'text-gray-500'
                   }`}
                 >
@@ -326,7 +326,7 @@ export default function DisplayClient({ initialCounters, initialNextUp }: Props)
 
             {/* Controls Toolbar */}
             <div
-              className={`flex items-center gap-2 border-l pl-4 sm:pl-5 ${
+              className={`flex items-center gap-1.5 sm:gap-2 ${
                 isDarkMode ? 'border-slate-800' : 'border-gray-200'
               }`}
             >
@@ -448,7 +448,7 @@ export default function DisplayClient({ initialCounters, initialNextUp }: Props)
             </p>
           </div>
         ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 auto-rows-fr">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 sm:gap-6 auto-rows-fr">
             {counters.map((c) => {
               const isFlashing = flashingCounterId === c.counter_id
               const isServing = Boolean(
@@ -579,7 +579,7 @@ export default function DisplayClient({ initialCounters, initialNextUp }: Props)
 
                         {/* Huge Monospace Token Number */}
                         <div
-                          className={`text-6xl sm:text-7xl lg:text-8xl font-mono font-black tracking-widest my-1 ${
+                          className={`text-5xl sm:text-7xl lg:text-8xl font-mono font-black tracking-widest my-1 ${
                             isDarkMode
                               ? 'text-emerald-400 drop-shadow-[0_0_24px_rgba(52,211,153,0.5)]'
                               : 'text-[#16A34A] drop-shadow-xs'
@@ -696,7 +696,7 @@ export default function DisplayClient({ initialCounters, initialNextUp }: Props)
             : 'bg-white/95 border-gray-200/90 shadow-xs'
         }`}
       >
-        <div className="max-w-[1920px] mx-auto flex flex-col md:flex-row md:items-center justify-between gap-4">
+        <div className="max-w-[1920px] mx-auto flex flex-col sm:flex-row sm:items-center justify-between gap-2 sm:gap-4">
           {/* Header Tag */}
           <div className="flex items-center gap-3 shrink-0">
             <span className="flex h-3 w-3 relative">
@@ -724,7 +724,7 @@ export default function DisplayClient({ initialCounters, initialNextUp }: Props)
           </div>
 
           {/* Tokens Horizontal Strip */}
-          <div className="flex-1 overflow-x-auto no-scrollbar py-1">
+          <div className="flex-1 overflow-x-auto">
             {nextUp.length === 0 ? (
               <span
                 className={`text-xs italic flex items-center gap-2 ${

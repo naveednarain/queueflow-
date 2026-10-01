@@ -177,7 +177,7 @@ export default function NotificationBell({ userId }: NotificationBellProps) {
       </button>
 
       {isOpen && (
-        <div className="absolute right-0 mt-2 w-80 sm:w-96 bg-white rounded-2xl shadow-xl border border-gray-100 py-3 z-50 text-gray-900">
+        <div className="fixed sm:absolute inset-x-2 sm:inset-x-auto sm:right-0 top-16 sm:top-auto sm:mt-2 w-auto sm:w-80 md:w-96 bg-white rounded-2xl shadow-xl border border-gray-100 py-3 z-[100] text-gray-900">
           <div className="flex items-center justify-between px-4 pb-2 border-b border-gray-100">
             <div className="flex items-center gap-2">
               <span className="font-semibold text-sm text-gray-900">Notifications</span>
@@ -187,20 +187,30 @@ export default function NotificationBell({ userId }: NotificationBellProps) {
                 </span>
               )}
             </div>
-            {unreadCount > 0 && (
+            <div className="flex items-center gap-2">
+              {unreadCount > 0 && (
+                <button
+                  type="button"
+                  onClick={handleMarkAll}
+                  disabled={loading}
+                  className="text-xs font-medium text-emerald-600 hover:text-emerald-700 flex items-center gap-1 hover:underline cursor-pointer disabled:opacity-50"
+                >
+                  <CheckCheck className="w-3.5 h-3.5" />
+                  Mark all read
+                </button>
+              )}
               <button
                 type="button"
-                onClick={handleMarkAll}
-                disabled={loading}
-                className="text-xs font-medium text-emerald-600 hover:text-emerald-700 flex items-center gap-1 hover:underline cursor-pointer disabled:opacity-50"
+                onClick={() => setIsOpen(false)}
+                className="text-xs font-medium text-gray-400 hover:text-gray-600 sm:hidden cursor-pointer"
+                aria-label="Close notifications"
               >
-                <CheckCheck className="w-3.5 h-3.5" />
-                Mark all read
+                ✕
               </button>
-            )}
+            </div>
           </div>
 
-          <div className="max-h-[360px] overflow-y-auto divide-y divide-gray-50">
+          <div className="max-h-[60vh] sm:max-h-[360px] overflow-y-auto divide-y divide-gray-50">
             {notifications.length === 0 ? (
               <div className="py-8 text-center text-gray-400">
                 <Bell className="w-8 h-8 mx-auto mb-2 text-gray-300" />

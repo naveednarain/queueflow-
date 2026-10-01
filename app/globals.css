@@ -151,8 +151,53 @@ body {
   }
   body {
     @apply bg-background text-foreground;
+    -webkit-tap-highlight-color: transparent;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    text-rendering: optimizeLegibility;
   }
   html {
     @apply font-sans;
+    scroll-behavior: smooth;
+  }
+}
+
+/* ── No-scrollbar utility ──────────────────────────────────────────── */
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+
+/* ── Performance: GPU hints for animated elements ─────────────────── */
+[data-animate],
+.animate-pulse,
+.animate-spin,
+.animate-ping,
+.animate-bounce {
+  will-change: transform, opacity;
+}
+
+/* ── Mobile touch targets — minimum 44×44 px ─────────────────────── */
+@media (max-width: 640px) {
+  button, [role="button"], a {
+    min-height: 36px;
+  }
+  
+  /* Make tables horizontally scrollable on mobile */
+  table {
+    display: block;
+    overflow-x: auto;
+    white-space: nowrap;
+  }
+}
+
+/* ── Prevent layout shift on font load ───────────────────────────── */
+@layer utilities {
+  .font-stable {
+    font-synthesis: none;
+    font-optical-sizing: auto;
   }
 }

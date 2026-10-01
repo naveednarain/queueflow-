@@ -55,15 +55,14 @@ export default function BookWizard({ departments, userEmail }: Props) {
   const [bookingPending, setBookingPending] = useState(false)
   const [confirmedAppt, setConfirmedAppt] = useState<Appointment | null>(null)
 
-  // Next 7 days list (starting from today)
+  // Next 7 days list (starting from TOMORROW - today is often past working hours)
   const next7Days = Array.from({ length: 7 }, (_, i) => {
     const d = new Date()
-    d.setDate(d.getDate() + i)
+    d.setDate(d.getDate() + i + 1) // Start from tomorrow
     const isoDate = d.toISOString().split('T')[0]
     const weekday = d.toLocaleDateString([], { weekday: 'short' })
     const dayMonth = d.toLocaleDateString([], { month: 'short', day: 'numeric' })
-    const isToday = i === 0
-    return { isoDate, weekday, dayMonth, isToday }
+    return { isoDate, weekday, dayMonth, isToday: false }
   })
 
   // Selected department and service objects
@@ -98,6 +97,7 @@ export default function BookWizard({ departments, userEmail }: Props) {
   const handleSelectService = (serviceId: string) => {
     setSelectedServiceId(serviceId)
     setSelectedSlot(null)
+    // Default to first available date (tomorrow)
     if (!selectedDate) {
       setSelectedDate(next7Days[0].isoDate)
     }
