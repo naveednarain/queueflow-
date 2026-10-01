@@ -55,14 +55,22 @@ export default function BookWizard({ departments, userEmail }: Props) {
   const [bookingPending, setBookingPending] = useState(false)
   const [confirmedAppt, setConfirmedAppt] = useState<Appointment | null>(null)
 
-  // Next 7 days list (starting from TOMORROW - today is often past working hours)
-  const next7Days = Array.from({ length: 7 }, (_, i) => {
+  // Local date formatter (avoids UTC timezone shift of toISOString)
+  const formatLocalDate = (date: Date) => {
+    const y = date.getFullYear()
+    const m = String(date.getMonth() + 1).padStart(2, '0')
+    const d = String(date.getDate()).padStart(2, '0')
+    return `${y}-${m}-${d}`
+  }
+
+  // Next 8 days list (Today + next 7 days)
+  const next7Days = Array.from({ length: 8 }, (_, i) => {
     const d = new Date()
-    d.setDate(d.getDate() + i + 1) // Start from tomorrow
-    const isoDate = d.toISOString().split('T')[0]
-    const weekday = d.toLocaleDateString([], { weekday: 'short' })
+    d.setDate(d.getDate() + i)
+    const isoDate = formatLocalDate(d)
+    const weekday = i === 0 ? 'Today' : d.toLocaleDateString([], { weekday: 'short' })
     const dayMonth = d.toLocaleDateString([], { month: 'short', day: 'numeric' })
-    return { isoDate, weekday, dayMonth, isToday: false }
+    return { isoDate, weekday, dayMonth, isToday: i === 0 }
   })
 
   // Selected department and service objects
@@ -76,10 +84,11 @@ export default function BookWizard({ departments, userEmail }: Props) {
       setSelectedSlot(null)
       getAvailableSlots(selectedServiceId, selectedDate)
         .then((data) => {
-          setSlots(data)
+          setSlots(data || [])
         })
         .catch(() => {
           toast.error('Failed to load slots for this date')
+          setSlots([])
         })
         .finally(() => {
           setLoadingSlots(false)
@@ -97,10 +106,8 @@ export default function BookWizard({ departments, userEmail }: Props) {
   const handleSelectService = (serviceId: string) => {
     setSelectedServiceId(serviceId)
     setSelectedSlot(null)
-    // Default to first available date (tomorrow)
-    if (!selectedDate) {
-      setSelectedDate(next7Days[0].isoDate)
-    }
+    // Default to tomorrow (index 1) so slots are guaranteed to be open even after hours, with Today at index 0
+    setSelectedDate(next7Days[1]?.isoDate || next7Days[0].isoDate)
     setStep(3)
   }
 

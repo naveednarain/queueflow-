@@ -5,6 +5,8 @@ import { redirect } from 'next/navigation'
 import { getServicesGrouped } from '@/lib/actions/token'
 import TokenFlow from './token-flow'
 
+export const dynamic = 'force-dynamic'
+
 export default async function TokenPage() {
   const supabase = await createClient()
   const {

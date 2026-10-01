@@ -21,6 +21,7 @@ import {
 } from 'lucide-react'
 import type { Profile } from '@/lib/types'
 import { logout } from '@/lib/actions/auth'
+import { createClient } from '@/lib/supabase/client'
 import NotificationBell from './notification-bell'
 
 interface NavbarProps {
@@ -100,8 +101,18 @@ export default function Navbar({ profile }: NavbarProps) {
     setLoggingOut(true)
     try {
       await logout()
+      try {
+        const supabase = createClient()
+        await supabase.auth.signOut()
+      } catch {
+        // Ignored if client session was already cleared
+      }
+      toast.success('Signed out successfully')
+      router.push('/login')
+      router.refresh()
     } catch {
       toast.error('Failed to sign out. Please try again.')
+    } finally {
       setLoggingOut(false)
     }
   }
@@ -236,28 +247,68 @@ export default function Navbar({ profile }: NavbarProps) {
 
       {/* Mobile menu */}
       {mobileOpen && (
-        <div className="md:hidden border-t border-gray-200 bg-white px-4 py-3 space-y-1">
-          {visibleLinks.map((link) => {
-            const active =
-              link.href === '/'
-                ? pathname === '/'
-                : pathname.startsWith(link.href)
-            return (
-              <Link
-                key={link.href}
-                href={link.href}
-                onClick={() => setMobileOpen(false)}
-                className={`flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
-                  active
-                    ? 'bg-[#22C55E]/10 text-[#22C55E]'
-                    : 'text-gray-600 hover:bg-gray-100 hover:text-gray-900'
-                }`}
+        <div className="md:hidden border-t border-gray-200 bg-white px-4 py-3 space-y-2">
+          {profile && (
+            <div className="flex items-center justify-between pb-2 border-b border-gray-100">
+              <div className="flex items-center gap-2">
+                <div className="w-8 h-8 rounded-full bg-[#22C55E]/10 flex items-center justify-center text-[#22C55E] font-semibold text-sm">
+                  {(profile.name ?? profile.email ?? 'U')[0].toUpperCase()}
+                </div>
+                <div className="flex flex-col">
+                  <span className="text-xs font-semibold text-gray-900 leading-tight">
+                    {profile.name ?? profile.email}
+                  </span>
+                  <span
+                    className={`text-[10px] font-medium px-1.5 py-0.2 rounded capitalize self-start ${
+                      roleBadgeColor[role] ?? 'bg-gray-100 text-gray-600'
+                    }`}
+                  >
+                    {role}
+                  </span>
+                </div>
+              </div>
+            </div>
+          )}
+
+          <div className="space-y-1">
+            {visibleLinks.map((link) => {
+              const active =
+                link.href === '/'
+                  ? pathname === '/'
+                  : pathname.startsWith(link.href)
+              return (
+                <Link
+                  key={link.href}
+                  href={link.href}
+                  onClick={() => setMobileOpen(false)}
+                  className={`flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
+                    active
+                      ? 'bg-[#22C55E]/10 text-[#22C55E]'
+                      : 'text-gray-600 hover:bg-gray-100 hover:text-gray-900'
+                  }`}
+                >
+                  {link.icon}
+                  {link.label}
+                </Link>
+              )
+            })}
+          </div>
+
+          {profile && (
+            <div className="pt-2 border-t border-gray-100">
+              <button
+                onClick={() => {
+                  setMobileOpen(false)
+                  handleLogout()
+                }}
+                disabled={loggingOut}
+                className="w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium text-red-600 hover:bg-red-50 transition-colors"
               >
-                {link.icon}
-                {link.label}
-              </Link>
-            )
-          })}
+                <LogOut className="w-4 h-4" />
+                <span>{loggingOut ? 'Signing out…' : 'Sign out'}</span>
+              </button>
+            </div>
+          )}
         </div>
       )}
     </nav>

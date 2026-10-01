@@ -200,7 +200,8 @@ export async function getAdminData(): Promise<AdminData> {
   }
 }
 
-const uuidSchema = z.string().uuid()
+const postgresUuidRegex = /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/
+const uuidSchema = z.string().regex(postgresUuidRegex, 'Invalid ID')
 const userRoleSchema = z.enum(['customer', 'staff', 'manager', 'admin'])
 
 const departmentSchema = z.object({
@@ -220,7 +221,7 @@ const serviceSchema = z.object({
 })
 
 const rulesSchema = z.object({
-  deptId: z.string().uuid(),
+  deptId: z.string().regex(postgresUuidRegex, 'Invalid department ID'),
   maxAppts: z.number().int().min(1).max(20),
   maxTokens: z.number().int().min(1).max(10),
   cancelLimit: z.number().int().min(1).max(20),

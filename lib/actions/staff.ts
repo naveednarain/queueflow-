@@ -131,7 +131,8 @@ export async function getCounterDetails(counterId: string): Promise<StaffCounter
   }
 }
 
-const uuidSchema = z.string().uuid()
+const postgresUuidRegex = /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/
+const uuidSchema = z.string().regex(postgresUuidRegex, 'Invalid ID')
 const statusSchema = z.enum(['available', 'busy', 'break', 'closed'])
 
 function sanitizeStaffError(msg?: string): string {

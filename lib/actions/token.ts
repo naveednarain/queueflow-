@@ -4,7 +4,9 @@ import { createClient } from '@/lib/supabase/server'
 import type { Token, DepartmentWithService, DepartmentGroup } from '@/lib/types'
 import { z } from 'zod'
 
-const uuidSchema = z.string().uuid()
+// PostgreSQL UUID regex: accepts 32 hex chars with hyphens (including seed data IDs)
+const postgresUuidRegex = /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/
+const uuidSchema = z.string().regex(postgresUuidRegex, 'Invalid service selected.')
 
 export async function getServicesGrouped(): Promise<DepartmentGroup[]> {
   const supabase = await createClient()

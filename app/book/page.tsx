@@ -5,6 +5,8 @@ import { redirect } from 'next/navigation'
 import { getServicesGrouped } from '@/lib/actions/token'
 import BookWizard from './book-wizard'
 
+export const dynamic = 'force-dynamic'
+
 export default async function BookPage() {
   const supabase = await createClient()
   const {

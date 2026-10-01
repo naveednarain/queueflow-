@@ -245,65 +245,78 @@ export default function DisplayClient({ initialCounters, initialNextUp }: Props)
 
       {/* ── Top Header Bar ─────────────────────────────────────────── */}
       <header
-        className={`sticky top-0 z-30 backdrop-blur-md px-6 py-3.5 transition-colors duration-300 border-b ${
+        className={`sticky top-0 z-30 backdrop-blur-md px-3 sm:px-6 py-2.5 sm:py-3.5 transition-colors duration-300 border-b ${
           isDarkMode
             ? 'bg-slate-950/80 border-slate-800/80 shadow-2xl'
             : 'bg-white/90 border-gray-200/80 shadow-xs'
         }`}
       >
-        <div className="max-w-[1920px] mx-auto flex flex-wrap items-center justify-between gap-2 sm:gap-4">
+        <div className="max-w-[1920px] mx-auto flex flex-col md:flex-row items-stretch md:items-center justify-between gap-2.5 sm:gap-4">
           {/* Logo & Operational Status */}
-          <div className="flex items-center gap-3.5">
-            <BackButton
-              fallbackHref="/"
-              variant={isDarkMode ? 'dark' : 'light'}
-            />
+          <div className="flex items-center justify-between sm:justify-start gap-2.5 sm:gap-3.5">
+            <div className="flex items-center gap-2 sm:gap-3">
+              <BackButton
+                fallbackHref="/"
+                variant={isDarkMode ? 'dark' : 'light'}
+              />
 
-            <div className="relative">
-              <div className="w-12 h-12 rounded-2xl bg-[#22C55E] flex items-center justify-center shadow-md shadow-green-200">
-                <Monitor className="w-6 h-6 text-white stroke-[2.5]" />
-              </div>
-              <span className="absolute -bottom-1 -right-1 flex h-3.5 w-3.5">
-                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-[#22C55E] opacity-75" />
-                <span className="relative inline-flex rounded-full h-3.5 w-3.5 bg-[#16A34A] ring-2 ring-white" />
-              </span>
-            </div>
-
-            <div>
-              <div className="flex items-center gap-2.5 flex-wrap">
-                <span className="text-2xl font-black tracking-tight text-gray-900 dark:text-white">
-                  Queue<span className="text-[#22C55E]">Flow</span>
+              <div className="relative">
+                <div className="w-9 h-9 sm:w-12 sm:h-12 rounded-xl sm:rounded-2xl bg-[#22C55E] flex items-center justify-center shadow-md shadow-green-200">
+                  <Monitor className="w-5 h-5 sm:w-6 sm:h-6 text-white stroke-[2.5]" />
+                </div>
+                <span className="absolute -bottom-0.5 -right-0.5 flex h-3 w-3">
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-[#22C55E] opacity-75" />
+                  <span className="relative inline-flex rounded-full h-3 w-3 bg-[#16A34A] ring-2 ring-white" />
                 </span>
-                <span
-                  className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-bold uppercase tracking-wider ${
-                    isDarkMode
-                      ? 'bg-emerald-950/80 text-emerald-300 border border-emerald-500/30'
-                      : 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+              </div>
+
+              <div>
+                <div className="flex items-center gap-1.5 sm:gap-2.5">
+                  <span className="text-lg sm:text-2xl font-black tracking-tight text-gray-900 dark:text-white">
+                    Queue<span className="text-[#22C55E]">Flow</span>
+                  </span>
+                  <span
+                    className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] sm:text-[11px] font-bold uppercase tracking-wider ${
+                      isDarkMode
+                        ? 'bg-emerald-950/80 text-emerald-300 border border-emerald-500/30'
+                        : 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+                    }`}
+                  >
+                    <span className="w-1.5 h-1.5 rounded-full bg-[#22C55E] animate-pulse" />
+                    Live
+                  </span>
+                </div>
+                <div
+                  className={`flex items-center gap-1.5 text-[11px] sm:text-xs ${
+                    isDarkMode ? 'text-slate-400' : 'text-gray-500'
                   }`}
                 >
-                  <span className="w-2 h-2 rounded-full bg-[#22C55E] animate-pulse" />
-                  Live Display
-                </span>
+                  <span className="hidden xs:inline">Terminal •</span>
+                  <span className="text-[#16A34A] font-semibold">
+                    {activeServingCount} In Service · {availableCountersCount} Ready
+                  </span>
+                </div>
               </div>
-              <div
-                className={`flex items-center gap-2 mt-0.5 text-xs ${
-                  isDarkMode ? 'text-slate-400' : 'text-gray-500'
-                }`}
-              >
-                <span>Public Service Terminal</span>
-                <span>•</span>
-                <span className="text-[#16A34A] font-semibold">
-                  {activeServingCount} In Service · {availableCountersCount} Ready
-                </span>
-              </div>
+            </div>
+
+            {/* Mobile Clock (shows on small screens in top right) */}
+            <div
+              className={`md:hidden flex items-center gap-1.5 px-2.5 py-1 rounded-xl border text-right transition-colors ${
+                isDarkMode
+                  ? 'bg-slate-900/80 border-slate-800 text-emerald-400'
+                  : 'bg-gray-50 border-gray-200 text-gray-900'
+              }`}
+            >
+              <Clock className="w-3.5 h-3.5 text-[#22C55E]" />
+              <span className="text-sm font-mono font-black">{currentTime || '--:--'}</span>
             </div>
           </div>
 
-          {/* Center / Right: Live Digital Clock & Interactive Controls */}
-          <div className="flex items-center gap-3 sm:gap-5 flex-wrap">
-            {/* Monospace Digital Clock */}
+          {/* Desktop Clock & Toolbar Controls */}
+          <div className="flex items-center justify-between md:justify-end gap-2 sm:gap-4 flex-wrap">
+            {/* Desktop Monospace Digital Clock */}
             <div
-              className={`flex items-center gap-3 px-4 py-2 rounded-2xl border transition-colors ${
+              className={`hidden md:flex items-center gap-3 px-4 py-2 rounded-2xl border transition-colors ${
                 isDarkMode
                   ? 'bg-slate-900/80 border-slate-800/80 text-emerald-400'
                   : 'bg-gray-50 border-gray-200 text-gray-900'
@@ -315,7 +328,7 @@ export default function DisplayClient({ initialCounters, initialNextUp }: Props)
                   {currentTime || '--:--:--'}
                 </div>
                 <div
-                  className={`text-[11px] font-semibold uppercase tracking-wide hidden sm:block ${
+                  className={`text-[11px] font-semibold uppercase tracking-wide ${
                     isDarkMode ? 'text-slate-400' : 'text-gray-500'
                   }`}
                 >
@@ -325,15 +338,11 @@ export default function DisplayClient({ initialCounters, initialNextUp }: Props)
             </div>
 
             {/* Controls Toolbar */}
-            <div
-              className={`flex items-center gap-1.5 sm:gap-2 ${
-                isDarkMode ? 'border-slate-800' : 'border-gray-200'
-              }`}
-            >
-              {/* Theme Toggle (Light / Dark) */}
+            <div className="flex items-center justify-between w-full md:w-auto gap-1 sm:gap-2">
+              {/* Theme Toggle */}
               <button
                 onClick={() => setIsDarkMode((prev) => !prev)}
-                className={`p-2.5 rounded-xl border transition-all duration-200 flex items-center gap-1.5 cursor-pointer ${
+                className={`flex-1 md:flex-initial p-2 sm:p-2.5 rounded-xl border transition-all duration-200 flex items-center justify-center gap-1.5 cursor-pointer ${
                   isDarkMode
                     ? 'bg-slate-900/80 border-slate-800 text-amber-300 hover:bg-slate-800'
                     : 'bg-white border-gray-200 text-gray-700 hover:bg-gray-50 shadow-xs'
@@ -349,7 +358,7 @@ export default function DisplayClient({ initialCounters, initialNextUp }: Props)
               {/* Chime Sound Toggle */}
               <button
                 onClick={() => setSoundEnabled((prev) => !prev)}
-                className={`p-2.5 rounded-xl border transition-all duration-200 flex items-center gap-1.5 cursor-pointer ${
+                className={`flex-1 md:flex-initial p-2 sm:p-2.5 rounded-xl border transition-all duration-200 flex items-center justify-center gap-1.5 cursor-pointer ${
                   soundEnabled
                     ? isDarkMode
                       ? 'bg-emerald-950/70 border-emerald-600/60 text-emerald-300 hover:bg-emerald-900/60'
@@ -369,7 +378,7 @@ export default function DisplayClient({ initialCounters, initialNextUp }: Props)
               {/* Voice Announcement Toggle */}
               <button
                 onClick={() => setVoiceEnabled((prev) => !prev)}
-                className={`p-2.5 rounded-xl border transition-all duration-200 flex items-center gap-1.5 cursor-pointer ${
+                className={`flex-1 md:flex-initial p-2 sm:p-2.5 rounded-xl border transition-all duration-200 flex items-center justify-center gap-1.5 cursor-pointer ${
                   voiceEnabled
                     ? isDarkMode
                       ? 'bg-cyan-950/70 border-cyan-600/60 text-cyan-300 hover:bg-cyan-900/60'
@@ -394,7 +403,7 @@ export default function DisplayClient({ initialCounters, initialNextUp }: Props)
               <button
                 onClick={refreshBoard}
                 disabled={isRefreshing}
-                className={`p-2.5 rounded-xl border transition-all duration-200 cursor-pointer ${
+                className={`p-2 sm:p-2.5 rounded-xl border transition-all duration-200 cursor-pointer ${
                   isDarkMode
                     ? 'bg-slate-900/80 hover:bg-slate-800 border-slate-800 text-slate-300'
                     : 'bg-white hover:bg-gray-50 border-gray-200 text-gray-700 shadow-xs'
@@ -407,7 +416,7 @@ export default function DisplayClient({ initialCounters, initialNextUp }: Props)
               {/* Fullscreen Button */}
               <button
                 onClick={toggleFullscreen}
-                className={`p-2.5 rounded-xl border transition-all duration-200 cursor-pointer ${
+                className={`p-2 sm:p-2.5 rounded-xl border transition-all duration-200 cursor-pointer ${
                   isDarkMode
                     ? 'bg-slate-900/80 hover:bg-slate-800 border-slate-800 text-slate-300'
                     : 'bg-white hover:bg-gray-50 border-gray-200 text-gray-700 shadow-xs'
@@ -422,7 +431,7 @@ export default function DisplayClient({ initialCounters, initialNextUp }: Props)
       </header>
 
       {/* ── Main Counters Live Display ─────────────────────────────── */}
-      <main className="flex-1 p-6 md:p-8 lg:p-10 max-w-[1920px] mx-auto w-full flex flex-col justify-start">
+      <main className="flex-1 p-3 sm:p-6 md:p-8 lg:p-10 max-w-[1920px] mx-auto w-full flex flex-col justify-start">
         {counters.length === 0 ? (
           <div className="flex-1 flex flex-col items-center justify-center py-24 text-center">
             <div
@@ -448,7 +457,7 @@ export default function DisplayClient({ initialCounters, initialNextUp }: Props)
             </p>
           </div>
         ) : (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 sm:gap-6 auto-rows-fr">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3 sm:gap-6 auto-rows-fr">
             {counters.map((c) => {
               const isFlashing = flashingCounterId === c.counter_id
               const isServing = Boolean(
@@ -462,10 +471,10 @@ export default function DisplayClient({ initialCounters, initialNextUp }: Props)
               return (
                 <div
                   key={c.counter_id}
-                  className={`group relative rounded-3xl p-6 transition-all duration-300 flex flex-col justify-between overflow-hidden border ${
+                  className={`group relative rounded-2xl sm:rounded-3xl p-4 sm:p-6 transition-all duration-300 flex flex-col justify-between overflow-hidden border ${
                     isDarkMode
                       ? isFlashing
-                        ? 'bg-gradient-to-b from-emerald-950/90 via-slate-900/95 to-slate-950 border-emerald-400 ring-2 ring-emerald-400/50 shadow-[0_0_50px_rgba(16,185,129,0.35)] scale-[1.02] z-20 animate-pulse'
+                        ? 'bg-gradient-to-b from-emerald-950/90 via-slate-900/95 to-slate-950 border-emerald-400 ring-2 ring-emerald-400/50 shadow-[0_0_50px_rgba(16,185,129,0.35)] scale-[1.01] z-20 animate-pulse'
                         : isServing
                         ? 'bg-gradient-to-b from-slate-900/95 via-slate-900/90 to-emerald-950/20 border-emerald-500/40 shadow-xl shadow-slate-950/80 hover:border-emerald-500/60'
                         : isAvailable
@@ -474,7 +483,7 @@ export default function DisplayClient({ initialCounters, initialNextUp }: Props)
                         ? 'bg-gradient-to-b from-slate-900/90 to-amber-950/20 border-amber-500/30 shadow-lg shadow-slate-950/50'
                         : 'bg-slate-900/40 border-slate-800/60 opacity-60'
                       : isFlashing
-                      ? 'bg-white border-[#22C55E] ring-4 ring-[#22C55E]/30 shadow-xl shadow-green-500/20 scale-[1.02] z-20 animate-pulse'
+                      ? 'bg-white border-[#22C55E] ring-4 ring-[#22C55E]/30 shadow-xl shadow-green-500/20 scale-[1.01] z-20 animate-pulse'
                       : isServing
                       ? 'bg-white border-emerald-200 shadow-md shadow-emerald-500/5 hover:border-emerald-300'
                       : isAvailable
@@ -486,18 +495,18 @@ export default function DisplayClient({ initialCounters, initialNextUp }: Props)
                 >
                   {/* Flashing "NOW CALLING" Banner */}
                   {isFlashing && (
-                    <div className="absolute top-0 inset-x-0 bg-[#22C55E] text-white py-1.5 px-4 text-center font-black text-xs uppercase tracking-widest flex items-center justify-center gap-2 shadow-md animate-bounce">
-                      <Megaphone className="w-4 h-4 fill-white" />
+                    <div className="absolute top-0 inset-x-0 bg-[#22C55E] text-white py-1 sm:py-1.5 px-3 sm:px-4 text-center font-black text-[10px] sm:text-xs uppercase tracking-widest flex items-center justify-center gap-1.5 shadow-md animate-bounce">
+                      <Megaphone className="w-3.5 h-3.5 fill-white" />
                       <span>NOW CALLING — PLEASE PROCEED</span>
-                      <Megaphone className="w-4 h-4 fill-white rotate-180" />
+                      <Megaphone className="w-3.5 h-3.5 fill-white rotate-180" />
                     </div>
                   )}
 
                   {/* Counter Card Top Header */}
-                  <div className={`flex items-start justify-between gap-3 ${isFlashing ? 'mt-4 mb-4' : 'mb-5'}`}>
+                  <div className={`flex items-start justify-between gap-2 sm:gap-3 ${isFlashing ? 'mt-3 mb-3' : 'mb-3 sm:mb-5'}`}>
                     <div>
                       <div
-                        className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-lg text-[10px] font-extrabold uppercase tracking-wider border ${
+                        className={`inline-flex items-center gap-1 sm:gap-1.5 px-2 sm:px-2.5 py-0.5 rounded-lg text-[9px] sm:text-[10px] font-extrabold uppercase tracking-wider border ${
                           isDarkMode
                             ? 'bg-slate-800/80 text-emerald-300 border-slate-700/60'
                             : 'bg-gray-50 text-gray-700 border-gray-200'
@@ -507,7 +516,7 @@ export default function DisplayClient({ initialCounters, initialNextUp }: Props)
                         <span>{c.department_name || 'Service Station'}</span>
                       </div>
                       <h2
-                        className={`text-2xl font-black mt-1 tracking-tight flex items-center gap-2 ${
+                        className={`text-lg sm:text-2xl font-black mt-1 tracking-tight flex items-center gap-2 ${
                           isDarkMode ? 'text-white' : 'text-gray-900'
                         }`}
                       >
@@ -517,7 +526,7 @@ export default function DisplayClient({ initialCounters, initialNextUp }: Props)
 
                     {/* Live Status Pill */}
                     <span
-                      className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] font-black uppercase tracking-wider border shadow-xs ${
+                      className={`inline-flex items-center gap-1 sm:gap-1.5 px-2.5 sm:px-3 py-0.5 sm:py-1 rounded-full text-[10px] sm:text-[11px] font-black uppercase tracking-wider border shadow-xs shrink-0 ${
                         isDarkMode
                           ? isServing
                             ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/50'
@@ -536,7 +545,7 @@ export default function DisplayClient({ initialCounters, initialNextUp }: Props)
                       }`}
                     >
                       <span
-                        className={`w-2 h-2 rounded-full ${
+                        className={`w-1.5 h-1.5 sm:w-2 sm:h-2 rounded-full ${
                           isServing
                             ? 'bg-[#22C55E] animate-ping'
                             : isAvailable
@@ -546,13 +555,13 @@ export default function DisplayClient({ initialCounters, initialNextUp }: Props)
                             : 'bg-gray-400'
                         }`}
                       />
-                      {isServing ? 'SERVING' : isAvailable ? 'READY' : isBreak ? 'ON BREAK' : 'CLOSED'}
+                      {isServing ? 'SERVING' : isAvailable ? 'READY' : isBreak ? 'BREAK' : 'CLOSED'}
                     </span>
                   </div>
 
                   {/* Main Token Display Box (Hero) */}
                   <div
-                    className={`flex-1 rounded-2xl p-6 text-center border flex flex-col items-center justify-center min-h-[220px] transition-all ${
+                    className={`flex-1 rounded-xl sm:rounded-2xl p-4 sm:p-6 text-center border flex flex-col items-center justify-center min-h-[160px] sm:min-h-[220px] transition-all ${
                       isDarkMode
                         ? 'bg-[#02050c]/90 border-slate-800/80 shadow-inner group-hover:border-slate-700/80'
                         : isServing
@@ -567,7 +576,7 @@ export default function DisplayClient({ initialCounters, initialNextUp }: Props)
                     {isServing && c.token_number ? (
                       <div className="w-full flex flex-col items-center justify-center animate-in fade-in zoom-in-95 duration-300">
                         <div
-                          className={`inline-flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-widest mb-1 ${
+                          className={`inline-flex items-center gap-1 sm:gap-1.5 text-[10px] sm:text-[11px] font-bold uppercase tracking-widest mb-1 ${
                             isDarkMode ? 'text-emerald-400/90' : 'text-emerald-700'
                           }`}
                         >
@@ -577,9 +586,9 @@ export default function DisplayClient({ initialCounters, initialNextUp }: Props)
                           </span>
                         </div>
 
-                        {/* Huge Monospace Token Number */}
+                        {/* Huge Monospace Token Number (Scales down gracefully on mobile) */}
                         <div
-                          className={`text-5xl sm:text-7xl lg:text-8xl font-mono font-black tracking-widest my-1 ${
+                          className={`text-4xl sm:text-6xl md:text-7xl lg:text-8xl font-mono font-black tracking-wider sm:tracking-widest my-1 truncate max-w-full ${
                             isDarkMode
                               ? 'text-emerald-400 drop-shadow-[0_0_24px_rgba(52,211,153,0.5)]'
                               : 'text-[#16A34A] drop-shadow-xs'
@@ -591,7 +600,7 @@ export default function DisplayClient({ initialCounters, initialNextUp }: Props)
                         {/* Service Name Badge */}
                         {c.service_name && (
                           <div
-                            className={`mt-2.5 max-w-[90%] px-3.5 py-1 rounded-xl text-xs font-semibold truncate border shadow-xs ${
+                            className={`mt-2 max-w-[90%] px-3 py-0.5 sm:py-1 rounded-xl text-[11px] sm:text-xs font-semibold truncate border shadow-xs ${
                               isDarkMode
                                 ? 'bg-slate-900/90 border-slate-800 text-slate-200'
                                 : 'bg-white border-gray-200 text-gray-800'
@@ -602,25 +611,25 @@ export default function DisplayClient({ initialCounters, initialNextUp }: Props)
                         )}
                       </div>
                     ) : isAvailable ? (
-                      <div className="flex flex-col items-center justify-center py-3">
+                      <div className="flex flex-col items-center justify-center py-2 sm:py-3">
                         <div
-                          className={`w-12 h-12 rounded-2xl border flex items-center justify-center mb-3 shadow-xs ${
+                          className={`w-10 h-10 sm:w-12 sm:h-12 rounded-xl sm:rounded-2xl border flex items-center justify-center mb-2 sm:mb-3 shadow-xs ${
                             isDarkMode
                               ? 'bg-sky-500/10 border-sky-500/20 text-sky-400 shadow-[0_0_20px_rgba(14,165,233,0.2)]'
                               : 'bg-blue-100/70 border-blue-200 text-blue-600'
                           }`}
                         >
-                          <CheckCircle2 className="w-6 h-6 animate-pulse" />
+                          <CheckCircle2 className="w-5 h-5 sm:w-6 sm:h-6 animate-pulse" />
                         </div>
                         <div
-                          className={`text-3xl font-black tracking-tight ${
+                          className={`text-2xl sm:text-3xl font-black tracking-tight ${
                             isDarkMode ? 'text-sky-200' : 'text-blue-900'
                           }`}
                         >
                           READY
                         </div>
                         <p
-                          className={`text-xs font-medium mt-1 ${
+                          className={`text-[11px] sm:text-xs font-medium mt-0.5 sm:mt-1 ${
                             isDarkMode ? 'text-slate-400' : 'text-blue-600'
                           }`}
                         >
@@ -628,25 +637,25 @@ export default function DisplayClient({ initialCounters, initialNextUp }: Props)
                         </p>
                       </div>
                     ) : isBreak ? (
-                      <div className="flex flex-col items-center justify-center py-3">
+                      <div className="flex flex-col items-center justify-center py-2 sm:py-3">
                         <div
-                          className={`w-12 h-12 rounded-2xl border flex items-center justify-center mb-3 shadow-xs ${
+                          className={`w-10 h-10 sm:w-12 sm:h-12 rounded-xl sm:rounded-2xl border flex items-center justify-center mb-2 sm:mb-3 shadow-xs ${
                             isDarkMode
                               ? 'bg-amber-500/10 border-amber-500/20 text-amber-400 shadow-[0_0_20px_rgba(245,158,11,0.2)]'
                               : 'bg-amber-100/70 border-amber-200 text-amber-600'
                           }`}
                         >
-                          <Coffee className="w-6 h-6" />
+                          <Coffee className="w-5 h-5 sm:w-6 sm:h-6" />
                         </div>
                         <div
-                          className={`text-3xl font-black tracking-tight ${
+                          className={`text-2xl sm:text-3xl font-black tracking-tight ${
                             isDarkMode ? 'text-amber-400' : 'text-amber-900'
                           }`}
                         >
                           ON BREAK
                         </div>
                         <p
-                          className={`text-xs font-medium mt-1 ${
+                          className={`text-[11px] sm:text-xs font-medium mt-0.5 sm:mt-1 ${
                             isDarkMode ? 'text-slate-400' : 'text-amber-700'
                           }`}
                         >
@@ -654,25 +663,25 @@ export default function DisplayClient({ initialCounters, initialNextUp }: Props)
                         </p>
                       </div>
                     ) : (
-                      <div className="flex flex-col items-center justify-center py-3">
+                      <div className="flex flex-col items-center justify-center py-2 sm:py-3">
                         <div
-                          className={`w-12 h-12 rounded-2xl border flex items-center justify-center mb-3 ${
+                          className={`w-10 h-10 sm:w-12 sm:h-12 rounded-xl sm:rounded-2xl border flex items-center justify-center mb-2 sm:mb-3 ${
                             isDarkMode
                               ? 'bg-slate-800/40 border-slate-800 text-slate-600'
                               : 'bg-gray-200/70 border-gray-300 text-gray-500'
                           }`}
                         >
-                          <AlertCircle className="w-6 h-6" />
+                          <AlertCircle className="w-5 h-5 sm:w-6 sm:h-6" />
                         </div>
                         <div
-                          className={`text-3xl font-black tracking-tight ${
+                          className={`text-2xl sm:text-3xl font-black tracking-tight ${
                             isDarkMode ? 'text-slate-500' : 'text-gray-500'
                           }`}
                         >
                           CLOSED
                         </div>
                         <p
-                          className={`text-xs font-medium mt-1 ${
+                          className={`text-[11px] sm:text-xs font-medium mt-0.5 sm:mt-1 ${
                             isDarkMode ? 'text-slate-600' : 'text-gray-400'
                           }`}
                         >
@@ -690,7 +699,7 @@ export default function DisplayClient({ initialCounters, initialNextUp }: Props)
 
       {/* ── Bottom Bar: Next In Line Ticker ────────────────────────── */}
       <footer
-        className={`sticky bottom-0 z-30 backdrop-blur-md px-6 py-3.5 transition-colors duration-300 border-t ${
+        className={`sticky bottom-0 z-30 backdrop-blur-md px-3 sm:px-6 py-2.5 sm:py-3.5 transition-colors duration-300 border-t ${
           isDarkMode
             ? 'bg-slate-950/90 border-slate-800/80 shadow-2xl'
             : 'bg-white/95 border-gray-200/90 shadow-xs'
@@ -698,14 +707,14 @@ export default function DisplayClient({ initialCounters, initialNextUp }: Props)
       >
         <div className="max-w-[1920px] mx-auto flex flex-col sm:flex-row sm:items-center justify-between gap-2 sm:gap-4">
           {/* Header Tag */}
-          <div className="flex items-center gap-3 shrink-0">
-            <span className="flex h-3 w-3 relative">
+          <div className="flex items-center gap-2.5 shrink-0">
+            <span className="flex h-2.5 w-2.5 sm:h-3 sm:w-3 relative">
               <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-[#22C55E] opacity-75" />
-              <span className="relative inline-flex rounded-full h-3 w-3 bg-[#16A34A]" />
+              <span className="relative inline-flex rounded-full h-2.5 w-2.5 sm:h-3 sm:w-3 bg-[#16A34A]" />
             </span>
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-1.5 sm:gap-2">
               <span
-                className={`text-xs font-black uppercase tracking-wider ${
+                className={`text-[11px] sm:text-xs font-black uppercase tracking-wider ${
                   isDarkMode ? 'text-slate-200' : 'text-gray-800'
                 }`}
               >
@@ -724,7 +733,7 @@ export default function DisplayClient({ initialCounters, initialNextUp }: Props)
           </div>
 
           {/* Tokens Horizontal Strip */}
-          <div className="flex-1 overflow-x-auto">
+          <div className="flex-1 overflow-x-auto no-scrollbar py-0.5">
             {nextUp.length === 0 ? (
               <span
                 className={`text-xs italic flex items-center gap-2 ${

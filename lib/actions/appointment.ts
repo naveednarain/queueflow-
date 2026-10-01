@@ -5,13 +5,15 @@ import type { Appointment, AppointmentWithDetails, TimeSlot, Token } from '@/lib
 import { revalidatePath } from 'next/cache'
 import { z } from 'zod'
 
+const postgresUuidRegex = /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/
+
 const bookSchema = z.object({
-  serviceId: z.string().uuid('Invalid service selected'),
+  serviceId: z.string().regex(postgresUuidRegex, 'Invalid service selected'),
   date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Invalid date format'),
   startTime: z.string().min(4).max(10),
 })
 
-const uuidSchema = z.string().uuid('Invalid record ID')
+const uuidSchema = z.string().regex(postgresUuidRegex, 'Invalid record ID')
 
 function sanitizeErrorMessage(msg?: string): string {
   if (!msg) return 'Operation failed. Please try again.'
@@ -36,7 +38,7 @@ export async function getAvailableSlots(
   date: string
 ): Promise<TimeSlot[]> {
   const parsed = z.object({
-    serviceId: z.string().uuid(),
+    serviceId: z.string().regex(postgresUuidRegex, 'Invalid service selected'),
     date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
   }).safeParse({ serviceId, date })
 
@@ -144,7 +146,7 @@ export async function rescheduleAppointment(
   startTime: string
 ): Promise<{ data: Appointment | null; error: string | null }> {
   const parsed = z.object({
-    appointmentId: z.string().uuid('Invalid appointment ID'),
+    appointmentId: z.string().regex(postgresUuidRegex, 'Invalid appointment ID'),
     date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Invalid date format'),
     startTime: z.string().min(4).max(10),
   }).safeParse({ appointmentId, date, startTime })
