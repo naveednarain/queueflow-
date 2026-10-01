@@ -791,10 +791,13 @@ declare
   v_curr_slot   time;
   v_next_slot   time;
   v_booked      int;
-  v_is_today    boolean := (p_date = current_date);
-  v_now_time    time := current_time;
+  v_today       date := (now() AT TIME ZONE 'Asia/Karachi')::date;
+  v_now_time    time := (now() AT TIME ZONE 'Asia/Karachi')::time;
+  v_is_today    boolean;
 begin
-  if p_date < current_date then
+  v_is_today := (p_date = v_today);
+
+  if p_date < v_today then
     return;
   end if;
 
@@ -822,7 +825,7 @@ begin
       end if;
     end if;
 
-    -- Skip past slots for today
+    -- Skip past slots for today (using PKT local time)
     if v_is_today and v_curr_slot <= v_now_time then
       v_curr_slot := v_next_slot;
       continue;
