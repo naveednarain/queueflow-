@@ -85,8 +85,11 @@ export async function requestPasswordReset(email: string, redirectTo?: string) {
   }
 
   const supabase = await createClient()
+  const fallbackUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://queueflow10.vercel.app'
+  const finalRedirect = redirectTo || `${fallbackUrl}/reset-password`
+
   const { error } = await supabase.auth.resetPasswordForEmail(parsed.data, {
-    redirectTo: redirectTo || `${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}/reset-password`,
+    redirectTo: finalRedirect,
   })
 
   if (error) {
