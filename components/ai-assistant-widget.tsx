@@ -36,11 +36,6 @@ export default function AiAssistantWidget() {
   const [loading, setLoading] = useState(false)
   const messagesEndRef = useRef<HTMLDivElement>(null)
 
-  // Do not render floating widget on public display kiosk board
-  if (pathname === '/display' || pathname?.startsWith('/display')) {
-    return null
-  }
-
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
   }
@@ -50,6 +45,12 @@ export default function AiAssistantWidget() {
       scrollToBottom()
     }
   }, [messages, isOpen])
+
+  // Do not render floating widget on public display kiosk board
+  // NOTE: this early return MUST come after all hooks to follow Rules of Hooks
+  if (pathname === '/display' || pathname?.startsWith('/display')) {
+    return null
+  }
 
   const handleSendMessage = async (textToSend?: string) => {
     const query = (textToSend || input).trim()
