@@ -60,6 +60,18 @@ export default function DisplayClient({ initialCounters, initialNextUp }: Props)
     prevTokensRef.current = map
   }, [initialCounters])
 
+  // ── Auto-refresh on mount if server-side fetch failed (empty initial data) ──
+  // This handles the "page could not load" scenario where the server component
+  // errored and fell back to empty arrays — client fetches fresh data itself.
+  useEffect(() => {
+    if (initialCounters.length === 0) {
+      // Small delay to ensure the component is fully mounted and Supabase client is ready
+      const t = setTimeout(() => refreshBoard(), 300)
+      return () => clearTimeout(t)
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
   // ── Web Audio Chime (Airport-style 2-tone melodic chime - Singleton Context) ──
   const playAirportChime = useCallback(() => {
     if (!soundEnabledRef.current || typeof window === 'undefined') return
