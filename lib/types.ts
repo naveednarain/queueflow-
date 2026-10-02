@@ -21,6 +21,7 @@ export interface Department {
   break_end: string | null
   slot_minutes: number
   max_per_slot: number
+  working_days?: number[]
   created_at: string
 }
 
@@ -138,6 +139,7 @@ export interface Notification {
 export interface DepartmentWithService {
   department_id: string
   department_name: string
+  working_days?: number[]
   service_id: string
   service_name: string
   prefix: string
@@ -145,10 +147,11 @@ export interface DepartmentWithService {
   active: boolean
 }
 
-// Grouped for the /token page
+// Grouped for the /token and /book page
 export interface DepartmentGroup {
   id: string
   name: string
+  working_days?: number[]
   services: Array<{
     id: string
     name: string

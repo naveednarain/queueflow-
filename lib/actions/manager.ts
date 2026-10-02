@@ -2,6 +2,7 @@
 
 import { createClient } from '@/lib/supabase/server'
 import { revalidatePath } from 'next/cache'
+import { recordActivityLog } from '@/lib/actions/admin'
 
 export interface DashboardSummary {
   appts_today: number
@@ -68,6 +69,7 @@ export interface ManagerDepartmentItem {
   close_time: string
   slot_minutes: number
   max_per_slot: number
+  working_days?: number[]
 }
 
 export async function fetchDashboardStats(
@@ -117,7 +119,7 @@ export async function getManagementData(): Promise<{
 
     supabase
       .from('departments')
-      .select('id, name, open_time, close_time, slot_minutes, max_per_slot')
+      .select('id, name, open_time, close_time, slot_minutes, max_per_slot, working_days')
       .order('name'),
 
     supabase
@@ -178,6 +180,8 @@ export async function saveCounterConfig(
       return { success: false, error: error.message }
     }
 
+    await recordActivityLog('update_counter_config', 'counters', counterId)
+
     revalidatePath('/manager')
     revalidatePath('/staff')
     revalidatePath('/display')
@@ -205,6 +209,8 @@ export async function saveServiceConfig(
       return { success: false, error: error.message }
     }
 
+    await recordActivityLog('update_service_config', 'services', serviceId)
+
     revalidatePath('/manager')
     revalidatePath('/book')
     revalidatePath('/token')
@@ -219,22 +225,32 @@ export async function saveDepartmentConfig(
   openTime: string,
   closeTime: string,
   slotMinutes: number,
-  maxPerSlot: number
+  maxPerSlot: number,
+  workingDays?: number[]
 ): Promise<{ success: boolean; error: string | null }> {
   try {
     const supabase = await createClient()
 
-    const { error } = await supabase.rpc('update_department_config', {
-      p_dept_id: deptId,
-      p_open_time: openTime,
-      p_close_time: closeTime,
-      p_slot_minutes: slotMinutes,
-      p_max_per_slot: maxPerSlot,
-    })
+    const updatePayload: Record<string, any> = {
+      open_time: openTime,
+      close_time: closeTime,
+      slot_minutes: slotMinutes,
+      max_per_slot: maxPerSlot,
+    }
+    if (workingDays) {
+      updatePayload.working_days = workingDays
+    }
+
+    const { error } = await supabase
+      .from('departments')
+      .update(updatePayload)
+      .eq('id', deptId)
 
     if (error) {
       return { success: false, error: error.message }
     }
+
+    await recordActivityLog('update_department_config', 'departments', deptId)
 
     revalidatePath('/manager')
     revalidatePath('/book')

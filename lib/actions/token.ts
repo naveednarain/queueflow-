@@ -3,6 +3,7 @@
 import { createClient } from '@/lib/supabase/server'
 import type { Token, DepartmentWithService, DepartmentGroup } from '@/lib/types'
 import { z } from 'zod'
+import { recordActivityLog } from '@/lib/actions/admin'
 
 // PostgreSQL UUID regex: accepts 32 hex chars with hyphens (including seed data IDs)
 const postgresUuidRegex = /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/
@@ -11,55 +12,52 @@ const uuidSchema = z.string().regex(postgresUuidRegex, 'Invalid service selected
 export async function getServicesGrouped(): Promise<DepartmentGroup[]> {
   const supabase = await createClient()
 
-  const { data, error } = await supabase.rpc('get_departments_with_services')
+  // First attempt: direct join to get departments with working_days and services
+  const { data: depts, error: deptsErr } = await supabase
+    .from('departments')
+    .select('id, name, working_days, services(id, name, prefix, avg_duration, active)')
+    .order('name')
 
-  if (error || !data) {
-    // Fallback: direct query if RPC not yet created
-    const { data: services } = await supabase
-      .from('services')
-      .select('*, departments(id, name)')
-      .eq('active', true)
-      .order('name')
-
-    if (!services) return []
-
-    const grouped: Record<string, DepartmentGroup> = {}
-    for (const s of services as any[]) {
-      const deptId = s.department_id
-      const deptName = s.departments?.name ?? 'Unknown'
-      if (!grouped[deptId]) {
-        grouped[deptId] = { id: deptId, name: deptName, services: [] }
-      }
-      grouped[deptId].services.push({
-        id: s.id,
-        name: s.name,
-        prefix: s.prefix,
-        avg_duration: s.avg_duration,
-        active: s.active,
-      })
-    }
-    return Object.values(grouped)
+  if (!deptsErr && depts) {
+    return depts.map((d: any) => ({
+      id: d.id,
+      name: d.name,
+      working_days: Array.isArray(d.working_days) ? d.working_days : [1, 2, 3, 4, 5],
+      services: (d.services ?? []).filter((s: any) => s.active),
+    }))
   }
 
-  // Group the RPC results by department
+  // Fallback: RPC or direct query
+  const { data: services } = await supabase
+    .from('services')
+    .select('*, departments(id, name, working_days)')
+    .eq('active', true)
+    .order('name')
+
+  if (!services) return []
+
   const grouped: Record<string, DepartmentGroup> = {}
-  for (const row of data as DepartmentWithService[]) {
-    if (!grouped[row.department_id]) {
-      grouped[row.department_id] = {
-        id: row.department_id,
-        name: row.department_name,
+  for (const s of services as any[]) {
+    const deptId = s.department_id
+    const deptName = s.departments?.name ?? 'Unknown'
+    const workingDays = Array.isArray(s.departments?.working_days)
+      ? s.departments.working_days
+      : [1, 2, 3, 4, 5]
+    if (!grouped[deptId]) {
+      grouped[deptId] = {
+        id: deptId,
+        name: deptName,
+        working_days: workingDays,
         services: [],
       }
     }
-    if (row.active) {
-      grouped[row.department_id].services.push({
-        id: row.service_id,
-        name: row.service_name,
-        prefix: row.prefix,
-        avg_duration: row.avg_duration,
-        active: row.active,
-      })
-    }
+    grouped[deptId].services.push({
+      id: s.id,
+      name: s.name,
+      prefix: s.prefix,
+      avg_duration: s.avg_duration,
+      active: s.active,
+    })
   }
   return Object.values(grouped)
 }
@@ -104,6 +102,9 @@ export async function createToken(
 
   // rpc returns an array (setof)
   const token = Array.isArray(data) ? (data[0] as Token) : (data as Token)
+  if (token) {
+    await recordActivityLog('create_token_' + token.token_number, 'tokens', token.id)
+  }
   return { data: token ?? null, error: null }
 }
 

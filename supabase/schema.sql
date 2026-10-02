@@ -11,6 +11,7 @@ create table departments (
   break_end time,
   slot_minutes int not null default 30,
   max_per_slot int not null default 6,
+  working_days integer[] not null default '{1,2,3,4,5}',
   created_at timestamptz default now()
 );
 
@@ -88,7 +89,7 @@ create table notifications (
 
 create table activity_logs (
   id uuid primary key default gen_random_uuid(),
-  actor uuid,
+  actor uuid references profiles(id) on delete set null,
   action text not null,
   entity text,
   entity_id uuid,

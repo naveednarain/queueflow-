@@ -811,6 +811,11 @@ begin
     return;
   end if;
 
+  -- Working days check: 0=Sun, 1=Mon, ..., 6=Sat
+  if v_dept.working_days is not null and not (extract(dow from p_date)::int = any(v_dept.working_days)) then
+    return;
+  end if;
+
   v_slot_step := (coalesce(v_dept.slot_minutes, 30) || ' minutes')::interval;
   v_curr_slot := v_dept.open_time;
 
@@ -893,6 +898,11 @@ begin
 
   select * into v_rule from rules where department_id = v_dept.id;
   select * into v_profile from profiles where id = v_uid;
+
+  -- Working days validation
+  if v_dept.working_days is not null and not (extract(dow from p_date)::int = any(v_dept.working_days)) then
+    raise exception 'Department is closed on this day. Selected date is not a working day.';
+  end if;
 
   -- Validation: date and time
   if p_date < current_date then
@@ -1594,7 +1604,8 @@ create or replace function update_department_config(
   p_open_time time,
   p_close_time time,
   p_slot_minutes int,
-  p_max_per_slot int
+  p_max_per_slot int,
+  p_working_days int[] default null
 )
 returns boolean
 language plpgsql security definer set search_path = public as $$
@@ -1607,7 +1618,8 @@ begin
   set open_time = p_open_time,
       close_time = p_close_time,
       slot_minutes = p_slot_minutes,
-      max_per_slot = p_max_per_slot
+      max_per_slot = p_max_per_slot,
+      working_days = coalesce(p_working_days, working_days)
   where id = p_dept_id;
 
   insert into activity_logs (actor, action, entity, entity_id)
@@ -1619,7 +1631,7 @@ end $$;
 grant execute on function get_dashboard_stats(timestamptz, timestamptz) to authenticated, anon;
 grant execute on function update_counter_config(uuid, text, uuid, uuid) to authenticated;
 grant execute on function update_service_config(uuid, int, boolean) to authenticated;
-grant execute on function update_department_config(uuid, time, time, int, int) to authenticated;
+grant execute on function update_department_config(uuid, time, time, int, int, int[]) to authenticated;
 
 -- ============================================================
 -- Phase 7: Notifications & Admin Rules Control

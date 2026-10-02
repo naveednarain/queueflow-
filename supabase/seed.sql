@@ -6,18 +6,19 @@
 -- ─────────────────────────────────────────────
 -- 1. Departments
 -- ─────────────────────────────────────────────
-insert into departments (id, name, open_time, close_time, break_start, break_end, slot_minutes, max_per_slot)
+insert into departments (id, name, open_time, close_time, break_start, break_end, slot_minutes, max_per_slot, working_days)
 values
-  ('11111111-1111-1111-1111-111111111111', 'Student Affairs', '09:00', '17:00', '13:00', '14:00', 30, 6),
-  ('22222222-2222-2222-2222-222222222222', 'Examination',     '09:00', '17:00', '13:00', '14:00', 30, 6),
-  ('33333333-3333-3333-3333-333333333333', 'Accounts',        '09:00', '17:00', '13:00', '14:00', 30, 6)
+  ('11111111-1111-1111-1111-111111111111', 'Student Affairs', '09:00', '17:00', '13:00', '14:00', 30, 6, '{1,2,3,4,5}'),
+  ('22222222-2222-2222-2222-222222222222', 'Examination',     '09:00', '17:00', '13:00', '14:00', 30, 6, '{1,2,3,4,5}'),
+  ('33333333-3333-3333-3333-333333333333', 'Accounts',        '09:00', '17:00', '13:00', '14:00', 30, 6, '{1,2,3,4,5}')
 on conflict (id) do update set
   open_time = excluded.open_time,
   close_time = excluded.close_time,
   break_start = excluded.break_start,
   break_end = excluded.break_end,
   slot_minutes = excluded.slot_minutes,
-  max_per_slot = excluded.max_per_slot;
+  max_per_slot = excluded.max_per_slot,
+  working_days = excluded.working_days;
 
 -- ─────────────────────────────────────────────
 -- 2. Services

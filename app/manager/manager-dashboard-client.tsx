@@ -22,6 +22,7 @@ import {
   ArrowUpRight,
   ShieldAlert,
   Percent,
+  Lock,
 } from 'lucide-react'
 import {
   ResponsiveContainer,
@@ -97,11 +98,18 @@ export default function ManagerDashboardClient({
 
   // Edit Department State
   const [editingDept, setEditingDept] = useState<ManagerDepartmentItem | null>(null)
-  const [deptForm, setDeptForm] = useState({
+  const [deptForm, setDeptForm] = useState<{
+    open_time: string
+    close_time: string
+    slot_minutes: number
+    max_per_slot: number
+    working_days: number[]
+  }>({
     open_time: '09:00',
     close_time: '17:00',
     slot_minutes: 30,
     max_per_slot: 6,
+    working_days: [1, 2, 3, 4, 5],
   })
   const [savingDept, setSavingDept] = useState(false)
 
@@ -217,11 +225,16 @@ export default function ManagerDashboardClient({
       close_time: d.close_time,
       slot_minutes: d.slot_minutes,
       max_per_slot: d.max_per_slot,
+      working_days: Array.isArray(d.working_days) ? d.working_days : [1, 2, 3, 4, 5],
     })
   }
 
   const handleSaveDept = async () => {
     if (!editingDept) return
+    if (deptForm.working_days.length === 0) {
+      toast.error('Please select at least one working day')
+      return
+    }
     setSavingDept(true)
     try {
       const res = await saveDepartmentConfig(
@@ -229,7 +242,8 @@ export default function ManagerDashboardClient({
         deptForm.open_time,
         deptForm.close_time,
         Number(deptForm.slot_minutes),
-        Number(deptForm.max_per_slot)
+        Number(deptForm.max_per_slot),
+        deptForm.working_days
       )
       if (res.success) {
         toast.success(`Department ${editingDept.name} updated`)
@@ -242,6 +256,7 @@ export default function ManagerDashboardClient({
                   close_time: deptForm.close_time,
                   slot_minutes: Number(deptForm.slot_minutes),
                   max_per_slot: Number(deptForm.max_per_slot),
+                  working_days: deptForm.working_days,
                 }
               : d
           )
@@ -886,6 +901,35 @@ export default function ManagerDashboardClient({
                       <span>Max Appointments / Slot:</span>
                       <span className="font-bold text-gray-800">{d.max_per_slot} visitors</span>
                     </div>
+                    <div className="flex items-center justify-between py-1">
+                      <span>Working Days:</span>
+                      <div className="flex items-center gap-1">
+                        {[
+                          { val: 1, label: 'M', name: 'Mon' },
+                          { val: 2, label: 'T', name: 'Tue' },
+                          { val: 3, label: 'W', name: 'Wed' },
+                          { val: 4, label: 'T', name: 'Thu' },
+                          { val: 5, label: 'F', name: 'Fri' },
+                          { val: 6, label: 'S', name: 'Sat' },
+                          { val: 0, label: 'S', name: 'Sun' },
+                        ].map((day) => {
+                          const isWorking = (d.working_days ?? [1, 2, 3, 4, 5]).includes(day.val)
+                          return (
+                            <span
+                              key={day.name}
+                              className={`w-4 h-4 rounded text-[9px] font-bold flex items-center justify-center ${
+                                isWorking
+                                  ? 'bg-emerald-100 text-emerald-800 border border-emerald-200'
+                                  : 'bg-gray-100 text-gray-300'
+                              }`}
+                              title={`${day.name}: ${isWorking ? 'Working' : 'OFF'}`}
+                            >
+                              {day.label}
+                            </span>
+                          )
+                        })}
+                      </div>
+                    </div>
                   </div>
                 </div>
 
@@ -1113,6 +1157,87 @@ export default function ManagerDashboardClient({
                   onChange={(e) => setDeptForm({ ...deptForm, max_per_slot: Number(e.target.value) })}
                   className="w-full bg-gray-50 border border-gray-200 rounded-xl px-3 py-2 text-sm font-semibold text-gray-800"
                 />
+              </div>
+
+              {/* Working Days Selector */}
+              <div className="pt-2 border-t border-gray-100">
+                <div className="flex items-center justify-between mb-1.5">
+                  <label className="block text-xs font-bold uppercase text-gray-700 flex items-center gap-1.5">
+                    <Calendar className="w-3.5 h-3.5 text-emerald-600" />
+                    Working Days for Appointments
+                  </label>
+                  <div className="flex items-center gap-1">
+                    <button
+                      type="button"
+                      onClick={() => setDeptForm({ ...deptForm, working_days: [1, 2, 3, 4, 5] })}
+                      className="px-2 py-0.5 rounded text-[10px] font-semibold bg-gray-100 hover:bg-emerald-50 hover:text-emerald-700 text-gray-600 cursor-pointer"
+                    >
+                      Mon–Fri
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setDeptForm({ ...deptForm, working_days: [1, 2, 3, 4, 5, 6] })}
+                      className="px-2 py-0.5 rounded text-[10px] font-semibold bg-gray-100 hover:bg-emerald-50 hover:text-emerald-700 text-gray-600 cursor-pointer"
+                    >
+                      Mon–Sat
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setDeptForm({ ...deptForm, working_days: [0, 1, 2, 3, 4, 5, 6] })}
+                      className="px-2 py-0.5 rounded text-[10px] font-semibold bg-gray-100 hover:bg-emerald-50 hover:text-emerald-700 text-gray-600 cursor-pointer"
+                    >
+                      All 7
+                    </button>
+                  </div>
+                </div>
+
+                <p className="text-[11px] text-gray-500 mb-2">
+                  Days set to <strong className="text-gray-700">OFF</strong> will lock slots and show an <strong className="text-rose-600">&ldquo;OFF&rdquo;</strong> label to users.
+                </p>
+
+                <div className="grid grid-cols-7 gap-1.5">
+                  {[
+                    { val: 1, label: 'Mon', full: 'Monday' },
+                    { val: 2, label: 'Tue', full: 'Tuesday' },
+                    { val: 3, label: 'Wed', full: 'Wednesday' },
+                    { val: 4, label: 'Thu', full: 'Thursday' },
+                    { val: 5, label: 'Fri', full: 'Friday' },
+                    { val: 6, label: 'Sat', full: 'Saturday' },
+                    { val: 0, label: 'Sun', full: 'Sunday' },
+                  ].map((day) => {
+                    const isSelected = deptForm.working_days.includes(day.val)
+                    return (
+                      <button
+                        key={day.val}
+                        type="button"
+                        onClick={() => {
+                          const current = deptForm.working_days
+                          const next = isSelected
+                            ? current.filter((v) => v !== day.val)
+                            : [...current, day.val]
+                          setDeptForm({ ...deptForm, working_days: next })
+                        }}
+                        className={`py-2 px-1 rounded-xl text-center border font-bold transition-all cursor-pointer ${
+                          isSelected
+                            ? 'bg-[#22C55E] text-white border-[#16A34A] shadow-xs'
+                            : 'bg-gray-50 text-gray-400 border-gray-200 hover:bg-gray-100'
+                        }`}
+                        title={`${day.full}: ${isSelected ? 'Working (Slots ON)' : 'OFF (Slots Locked)'}`}
+                      >
+                        <span className="block text-[10px] uppercase">{day.label}</span>
+                        <span
+                          className={`inline-block text-[9px] font-extrabold px-1 rounded mt-0.5 ${
+                            isSelected
+                              ? 'bg-emerald-700/40 text-emerald-100'
+                              : 'bg-gray-200 text-gray-500'
+                          }`}
+                        >
+                          {isSelected ? 'ON' : 'OFF'}
+                        </span>
+                      </button>
+                    )
+                  })}
+                </div>
               </div>
             </div>
 

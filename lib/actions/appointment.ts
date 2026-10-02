@@ -22,6 +22,10 @@ function sanitizeErrorMessage(msg?: string): string {
     msg.includes('past') ||
     msg.includes('already have') ||
     msg.includes('working hours') ||
+    msg.includes('working day') ||
+    msg.includes('closed') ||
+    msg.includes('Off Day') ||
+    msg.includes('off day') ||
     msg.includes('break time') ||
     msg.includes('maximum') ||
     msg.includes('window') ||
@@ -45,6 +49,23 @@ export async function getAvailableSlots(
   if (!parsed.success) return []
 
   const supabase = await createClient()
+
+  // Pre-check working days for the department
+  const { data: svc } = await supabase
+    .from('services')
+    .select('department_id, departments(working_days)')
+    .eq('id', parsed.data.serviceId)
+    .single()
+
+  if (svc) {
+    const [y, m, d] = parsed.data.date.split('-').map(Number)
+    const dow = new Date(y, m - 1, d).getDay()
+    const deptWorkingDays: number[] = (svc as any)?.departments?.working_days ?? [1, 2, 3, 4, 5]
+    if (!deptWorkingDays.includes(dow)) {
+      // Off day: Return empty slots immediately
+      return []
+    }
+  }
 
   const { data, error } = await supabase.rpc('get_available_slots', {
     p_service: parsed.data.serviceId,
@@ -75,6 +96,25 @@ export async function bookAppointment(
   }
 
   const supabase = await createClient()
+
+  // Validate department working days before calling RPC
+  const { data: svc } = await supabase
+    .from('services')
+    .select('department_id, departments(name, working_days)')
+    .eq('id', parsed.data.serviceId)
+    .single()
+
+  if (svc) {
+    const [y, m, d] = parsed.data.date.split('-').map(Number)
+    const dow = new Date(y, m - 1, d).getDay()
+    const deptWorkingDays: number[] = (svc as any)?.departments?.working_days ?? [1, 2, 3, 4, 5]
+    if (!deptWorkingDays.includes(dow)) {
+      return {
+        data: null,
+        error: 'Department is closed on this day (Off Day). Appointments cannot be booked.',
+      }
+    }
+  }
 
   const { data, error } = await supabase.rpc('book_appointment', {
     p_service: parsed.data.serviceId,

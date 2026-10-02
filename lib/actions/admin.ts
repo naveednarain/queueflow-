@@ -22,6 +22,7 @@ export interface AdminDepartmentItem {
   close_time: string
   slot_minutes: number
   max_per_slot: number
+  working_days: number[]
   created_at: string
   services_count?: number
   counters_count?: number
@@ -53,6 +54,7 @@ export interface AdminActivityLogItem {
   actor: string | null
   actor_name: string
   actor_email: string
+  actor_role?: string
   action: string
   entity: string | null
   entity_id: string | null
@@ -79,7 +81,7 @@ export async function getAdminData(): Promise<AdminData> {
 
     supabase
       .from('departments')
-      .select('id, name, open_time, close_time, slot_minutes, max_per_slot, created_at, services(id), counters(id)')
+      .select('id, name, open_time, close_time, slot_minutes, max_per_slot, working_days, created_at, services(id), counters(id)')
       .order('name'),
 
     supabase
@@ -93,9 +95,9 @@ export async function getAdminData(): Promise<AdminData> {
 
     supabase
       .from('activity_logs')
-      .select('id, actor, action, entity, entity_id, created_at, profiles!activity_logs_actor_fkey(name, email)')
+      .select('id, actor, action, entity, entity_id, created_at, profiles!activity_logs_actor_fkey(name, email, role)')
       .order('created_at', { ascending: false })
-      .limit(50), // Reduced from 100 to 50 for faster transfer
+      .limit(100),
   ])
 
   const users = usersRes.data
@@ -112,6 +114,7 @@ export async function getAdminData(): Promise<AdminData> {
     close_time: d.close_time,
     slot_minutes: d.slot_minutes,
     max_per_slot: d.max_per_slot,
+    working_days: Array.isArray(d.working_days) ? d.working_days : [1, 2, 3, 4, 5],
     created_at: d.created_at,
     services_count: Array.isArray(d.services) ? d.services.length : 0,
     counters_count: Array.isArray(d.counters) ? d.counters.length : 0,
@@ -159,6 +162,7 @@ export async function getAdminData(): Promise<AdminData> {
       actor: l.actor,
       actor_name: prof?.name || 'System / Automated',
       actor_email: prof?.email || 'system@queueflow.internal',
+      actor_role: prof?.role || 'system',
       action: l.action,
       entity: l.entity,
       entity_id: l.entity_id,
@@ -185,6 +189,7 @@ const departmentSchema = z.object({
   closeTime: z.string().min(4).max(8),
   slotMinutes: z.number().int().min(5).max(120),
   maxPerSlot: z.number().int().min(1).max(50),
+  workingDays: z.array(z.number().int().min(0).max(6)).min(1, 'Select at least one working day').default([1, 2, 3, 4, 5]),
 })
 
 const serviceSchema = z.object({
@@ -240,6 +245,8 @@ export async function updateUserRole(
       return { success: false, error: sanitizeAdminError(error.message) }
     }
 
+    await recordActivityLog('update_user_role_to_' + parsedRole.data, 'profiles', parsedId.data)
+
     revalidatePath('/admin')
     revalidatePath('/staff')
     revalidatePath('/manager')
@@ -285,6 +292,8 @@ export async function updateDepartmentRules(
       return { success: false, error: sanitizeAdminError(error.message) }
     }
 
+    await recordActivityLog('update_rules', 'rules', parsed.data.deptId)
+
     revalidatePath('/admin')
     revalidatePath('/token')
     revalidatePath('/book')
@@ -299,7 +308,8 @@ export async function createDepartment(
   openTime: string,
   closeTime: string,
   slotMinutes: number,
-  maxPerSlot: number
+  maxPerSlot: number,
+  workingDays: number[] = [1, 2, 3, 4, 5]
 ): Promise<{ success: boolean; error: string | null }> {
   const parsed = departmentSchema.safeParse({
     name,
@@ -307,6 +317,7 @@ export async function createDepartment(
     closeTime,
     slotMinutes,
     maxPerSlot,
+    workingDays,
   })
   if (!parsed.success) {
     return { success: false, error: parsed.error.issues[0].message }
@@ -323,6 +334,7 @@ export async function createDepartment(
         close_time: parsed.data.closeTime,
         slot_minutes: parsed.data.slotMinutes,
         max_per_slot: parsed.data.maxPerSlot,
+        working_days: parsed.data.workingDays,
       })
       .select('id')
       .single()
@@ -341,6 +353,7 @@ export async function createDepartment(
         late_checkin_minutes: 10,
         early_checkin_minutes: 10,
       })
+      await recordActivityLog('create_department', 'departments', dept.id)
     }
 
     revalidatePath('/admin')
@@ -358,7 +371,8 @@ export async function updateDepartment(
   openTime: string,
   closeTime: string,
   slotMinutes: number,
-  maxPerSlot: number
+  maxPerSlot: number,
+  workingDays: number[] = [1, 2, 3, 4, 5]
 ): Promise<{ success: boolean; error: string | null }> {
   const parsedId = uuidSchema.safeParse(id)
   const parsed = departmentSchema.safeParse({
@@ -367,6 +381,7 @@ export async function updateDepartment(
     closeTime,
     slotMinutes,
     maxPerSlot,
+    workingDays,
   })
   if (!parsedId.success || !parsed.success) {
     return { success: false, error: 'Invalid department data provided.' }
@@ -383,12 +398,15 @@ export async function updateDepartment(
         close_time: parsed.data.closeTime,
         slot_minutes: parsed.data.slotMinutes,
         max_per_slot: parsed.data.maxPerSlot,
+        working_days: parsed.data.workingDays,
       })
       .eq('id', parsedId.data)
 
     if (error) {
       return { success: false, error: sanitizeAdminError(error.message) }
     }
+
+    await recordActivityLog('update_department', 'departments', parsedId.data)
 
     revalidatePath('/admin')
     revalidatePath('/manager')
@@ -415,6 +433,8 @@ export async function deleteDepartment(
     if (error) {
       return { success: false, error: sanitizeAdminError(error.message) }
     }
+
+    await recordActivityLog('delete_department', 'departments', parsedId.data)
 
     revalidatePath('/admin')
     revalidatePath('/manager')
@@ -449,17 +469,25 @@ export async function createService(
   try {
     const supabase = await createClient()
 
-    const { error } = await supabase.from('services').insert({
-      department_id: parsedDeptId.data,
-      name: parsed.data.name,
-      prefix: parsed.data.prefix.toUpperCase().slice(0, 1),
-      avg_duration: parsed.data.avgDuration,
-      priority_level: parsed.data.priorityLevel,
-      active: parsed.data.active,
-    })
+    const { data: svc, error } = await supabase
+      .from('services')
+      .insert({
+        department_id: parsedDeptId.data,
+        name: parsed.data.name,
+        prefix: parsed.data.prefix.toUpperCase().slice(0, 1),
+        avg_duration: parsed.data.avgDuration,
+        priority_level: parsed.data.priorityLevel,
+        active: parsed.data.active,
+      })
+      .select('id')
+      .single()
 
     if (error) {
       return { success: false, error: sanitizeAdminError(error.message) }
+    }
+
+    if (svc) {
+      await recordActivityLog('create_service', 'services', svc.id)
     }
 
     revalidatePath('/admin')
@@ -510,6 +538,8 @@ export async function updateService(
       return { success: false, error: sanitizeAdminError(error.message) }
     }
 
+    await recordActivityLog('update_service', 'services', parsedId.data)
+
     revalidatePath('/admin')
     revalidatePath('/manager')
     revalidatePath('/book')
@@ -537,6 +567,8 @@ export async function deleteService(
       return { success: false, error: sanitizeAdminError(error.message) }
     }
 
+    await recordActivityLog('delete_service', 'services', parsedId.data)
+
     revalidatePath('/admin')
     revalidatePath('/manager')
     revalidatePath('/book')
@@ -560,6 +592,8 @@ export async function triggerSystemMaintenance(): Promise<{
       supabase.rpc('mark_missed_appointments'),
     ])
 
+    await recordActivityLog('trigger_system_maintenance', 'system')
+
     return {
       remindersSent: remindersRes.data ?? 0,
       missedCleaned: missedRes.data ?? 0,
@@ -567,5 +601,75 @@ export async function triggerSystemMaintenance(): Promise<{
     }
   } catch (err: any) {
     return { remindersSent: 0, missedCleaned: 0, error: err.message }
+  }
+}
+
+export async function recordActivityLog(
+  action: string,
+  entity?: string,
+  entityId?: string
+): Promise<void> {
+  try {
+    const supabase = await createClient()
+    const {
+      data: { user },
+    } = await supabase.auth.getUser()
+
+    await supabase.from('activity_logs').insert({
+      actor: user?.id ?? null,
+      action,
+      entity: entity ?? null,
+      entity_id: entityId ?? null,
+    })
+  } catch (err) {
+    console.error('Failed to log activity:', err)
+  }
+}
+
+export async function getActivityLogs(): Promise<AdminActivityLogItem[]> {
+  try {
+    const supabase = await createClient()
+    const { data: logs, error } = await supabase
+      .from('activity_logs')
+      .select('id, actor, action, entity, entity_id, created_at, profiles!activity_logs_actor_fkey(name, email, role)')
+      .order('created_at', { ascending: false })
+      .limit(100)
+
+    if (error || !logs) {
+      const { data: rawLogs } = await supabase
+        .from('activity_logs')
+        .select('*')
+        .order('created_at', { ascending: false })
+        .limit(100)
+
+      return (rawLogs ?? []).map((l: any) => ({
+        id: l.id,
+        actor: l.actor,
+        actor_name: 'User / System',
+        actor_email: '',
+        actor_role: 'system',
+        action: l.action,
+        entity: l.entity,
+        entity_id: l.entity_id,
+        created_at: l.created_at,
+      }))
+    }
+
+    return (logs ?? []).map((l: any) => {
+      const prof = Array.isArray(l.profiles) ? l.profiles[0] : l.profiles
+      return {
+        id: l.id,
+        actor: l.actor,
+        actor_name: prof?.name || 'System / Automated',
+        actor_email: prof?.email || 'system@queueflow.internal',
+        actor_role: prof?.role || 'system',
+        action: l.action,
+        entity: l.entity,
+        entity_id: l.entity_id,
+        created_at: l.created_at,
+      }
+    })
+  } catch {
+    return []
   }
 }

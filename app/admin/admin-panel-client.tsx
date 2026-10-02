@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import {
   Shield,
   Building2,
@@ -22,6 +22,8 @@ import {
   Sparkles,
   Activity,
   Phone,
+  Calendar,
+  Lock,
 } from 'lucide-react'
 import { toast } from 'sonner'
 import BackButton from '@/components/back-button'
@@ -35,6 +37,7 @@ import {
   updateService,
   deleteService,
   triggerSystemMaintenance,
+  getActivityLogs,
   type AdminData,
   type AdminUserItem,
   type AdminDepartmentItem,
@@ -52,17 +55,48 @@ export default function AdminPanelClient({ initialData, adminEmail }: Props) {
   const [activeTab, setActiveTab] = useState<'departments' | 'users' | 'services' | 'rules' | 'logs'>('departments')
   const [searchQuery, setSearchQuery] = useState('')
   const [runningMaintenance, setRunningMaintenance] = useState(false)
+  const [refreshingLogs, setRefreshingLogs] = useState(false)
+  const [logRoleFilter, setLogRoleFilter] = useState<'all' | 'admin' | 'manager' | 'staff' | 'customer'>('all')
+
+  const refreshLogs = async (silent = false) => {
+    if (!silent) setRefreshingLogs(true)
+    try {
+      const logs = await getActivityLogs()
+      setData((prev) => ({ ...prev, logs }))
+      if (!silent) {
+        toast.success(`Activity logs updated (${logs.length} logs)`)
+      }
+    } catch {
+      if (!silent) toast.error('Failed to update logs')
+    } finally {
+      if (!silent) setRefreshingLogs(false)
+    }
+  }
+
+  useEffect(() => {
+    if (activeTab === 'logs') {
+      refreshLogs(true)
+    }
+  }, [activeTab])
 
   // ── Modals State ─────────────────────────────────────────────
   // Department Modal
   const [deptModalOpen, setDeptModalOpen] = useState(false)
   const [editingDept, setEditingDept] = useState<AdminDepartmentItem | null>(null)
-  const [deptForm, setDeptForm] = useState({
+  const [deptForm, setDeptForm] = useState<{
+    name: string
+    open_time: string
+    close_time: string
+    slot_minutes: number
+    max_per_slot: number
+    working_days: number[]
+  }>({
     name: '',
     open_time: '09:00',
     close_time: '17:00',
     slot_minutes: 30,
     max_per_slot: 6,
+    working_days: [1, 2, 3, 4, 5],
   })
   const [savingDept, setSavingDept] = useState(false)
 
@@ -111,6 +145,7 @@ export default function AdminPanelClient({ initialData, adminEmail }: Props) {
         toast.success(
           `Maintenance complete! ${res.remindersSent} reminder(s) sent, ${res.missedCleaned} missed appointment(s) updated.`
         )
+        refreshLogs(true)
       }
     } finally {
       setRunningMaintenance(false)
@@ -126,6 +161,7 @@ export default function AdminPanelClient({ initialData, adminEmail }: Props) {
       close_time: '17:00',
       slot_minutes: 30,
       max_per_slot: 6,
+      working_days: [1, 2, 3, 4, 5],
     })
     setDeptModalOpen(true)
   }
@@ -138,6 +174,7 @@ export default function AdminPanelClient({ initialData, adminEmail }: Props) {
       close_time: d.close_time,
       slot_minutes: d.slot_minutes,
       max_per_slot: d.max_per_slot,
+      working_days: Array.isArray(d.working_days) ? d.working_days : [1, 2, 3, 4, 5],
     })
     setDeptModalOpen(true)
   }
@@ -145,6 +182,10 @@ export default function AdminPanelClient({ initialData, adminEmail }: Props) {
   const handleSaveDept = async () => {
     if (!deptForm.name.trim()) {
       toast.error('Department name is required')
+      return
+    }
+    if (deptForm.working_days.length === 0) {
+      toast.error('Please select at least one working day')
       return
     }
     setSavingDept(true)
@@ -156,7 +197,8 @@ export default function AdminPanelClient({ initialData, adminEmail }: Props) {
           deptForm.open_time,
           deptForm.close_time,
           Number(deptForm.slot_minutes),
-          Number(deptForm.max_per_slot)
+          Number(deptForm.max_per_slot),
+          deptForm.working_days
         )
         if (res.success) {
           toast.success(`Department ${deptForm.name} updated`)
@@ -167,6 +209,7 @@ export default function AdminPanelClient({ initialData, adminEmail }: Props) {
             ),
           }))
           setDeptModalOpen(false)
+          refreshLogs(true)
         } else {
           toast.error(res.error || 'Failed to update department')
         }
@@ -176,11 +219,13 @@ export default function AdminPanelClient({ initialData, adminEmail }: Props) {
           deptForm.open_time,
           deptForm.close_time,
           Number(deptForm.slot_minutes),
-          Number(deptForm.max_per_slot)
+          Number(deptForm.max_per_slot),
+          deptForm.working_days
         )
         if (res.success) {
           toast.success(`Department ${deptForm.name} created`)
           setDeptModalOpen(false)
+          refreshLogs(true)
           window.location.reload()
         } else {
           toast.error(res.error || 'Failed to create department')
@@ -205,6 +250,7 @@ export default function AdminPanelClient({ initialData, adminEmail }: Props) {
           services: prev.services.filter((s) => s.department_id !== id),
           rules: prev.rules.filter((r) => r.department_id !== id),
         }))
+        refreshLogs(true)
       } else {
         toast.error(res.error || 'Failed to delete department')
       }
@@ -274,6 +320,7 @@ export default function AdminPanelClient({ initialData, adminEmail }: Props) {
             ),
           }))
           setServiceModalOpen(false)
+          refreshLogs(true)
         } else {
           toast.error(res.error || 'Failed to update service')
         }
@@ -289,6 +336,7 @@ export default function AdminPanelClient({ initialData, adminEmail }: Props) {
         if (res.success) {
           toast.success(`Service ${serviceForm.name} created`)
           setServiceModalOpen(false)
+          refreshLogs(true)
           window.location.reload()
         } else {
           toast.error(res.error || 'Failed to create service')
@@ -309,6 +357,7 @@ export default function AdminPanelClient({ initialData, adminEmail }: Props) {
           ...prev,
           services: prev.services.filter((s) => s.id !== id),
         }))
+        refreshLogs(true)
       } else {
         toast.error(res.error || 'Failed to delete service')
       }
@@ -341,6 +390,7 @@ export default function AdminPanelClient({ initialData, adminEmail }: Props) {
           ),
         }))
         setUserModalOpen(false)
+        refreshLogs(true)
       } else {
         toast.error(res.error || 'Failed to update user')
       }
@@ -383,6 +433,7 @@ export default function AdminPanelClient({ initialData, adminEmail }: Props) {
           ),
         }))
         setRulesModalOpen(false)
+        refreshLogs(true)
       } else {
         toast.error(res.error || 'Failed to update rules')
       }
@@ -428,12 +479,20 @@ export default function AdminPanelClient({ initialData, adminEmail }: Props) {
     (r.department_name || '').toLowerCase().includes(q)
   )
 
-  const filteredLogs = data.logs.filter((l) =>
-    (l.action || '').toLowerCase().includes(q) ||
-    (l.actor_name || '').toLowerCase().includes(q) ||
-    (l.actor_email || '').toLowerCase().includes(q) ||
-    (l.entity && l.entity.toLowerCase().includes(q))
-  )
+  const filteredLogs = data.logs.filter((l) => {
+    const matchesSearch =
+      (l.action || '').toLowerCase().includes(q) ||
+      (l.actor_name || '').toLowerCase().includes(q) ||
+      (l.actor_email || '').toLowerCase().includes(q) ||
+      (l.actor_role && l.actor_role.toLowerCase().includes(q)) ||
+      (l.entity && l.entity.toLowerCase().includes(q))
+
+    const matchesRole =
+      logRoleFilter === 'all' ||
+      (l.actor_role && l.actor_role.toLowerCase() === logRoleFilter)
+
+    return matchesSearch && matchesRole
+  })
 
   return (
     <div className="space-y-8">
@@ -622,10 +681,38 @@ export default function AdminPanelClient({ initialData, adminEmail }: Props) {
                         </div>
                       </td>
                       <td className="py-3.5 px-4 text-gray-700">
-                        <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-gray-50 border border-gray-200 font-semibold text-xs">
-                          <Clock className="w-3.5 h-3.5 text-gray-500" />
-                          {formatTimeString(d.open_time)} – {formatTimeString(d.close_time)}
-                        </span>
+                        <div className="space-y-1.5">
+                          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-gray-50 border border-gray-200 font-semibold text-xs">
+                            <Clock className="w-3.5 h-3.5 text-gray-500" />
+                            {formatTimeString(d.open_time)} – {formatTimeString(d.close_time)}
+                          </span>
+                          <div className="flex items-center gap-1" title="Working Days (Mon - Sun)">
+                            {[
+                              { val: 1, label: 'M', name: 'Mon' },
+                              { val: 2, label: 'T', name: 'Tue' },
+                              { val: 3, label: 'W', name: 'Wed' },
+                              { val: 4, label: 'T', name: 'Thu' },
+                              { val: 5, label: 'F', name: 'Fri' },
+                              { val: 6, label: 'S', name: 'Sat' },
+                              { val: 0, label: 'S', name: 'Sun' },
+                            ].map((day) => {
+                              const isWorking = (d.working_days ?? [1, 2, 3, 4, 5]).includes(day.val)
+                              return (
+                                <span
+                                  key={day.name}
+                                  className={`w-4 h-4 rounded text-[9px] font-bold flex items-center justify-center ${
+                                    isWorking
+                                      ? 'bg-emerald-100 text-emerald-800 border border-emerald-200'
+                                      : 'bg-gray-100 text-gray-300'
+                                  }`}
+                                  title={`${day.name}: ${isWorking ? 'Working (Slots Active)' : 'Off (Slots OFF)'}`}
+                                >
+                                  {day.label}
+                                </span>
+                              )
+                            })}
+                          </div>
+                        </div>
                       </td>
                       <td className="py-3.5 px-4 text-gray-700 font-semibold text-xs">
                         {d.slot_minutes} mins
@@ -1001,22 +1088,77 @@ export default function AdminPanelClient({ initialData, adminEmail }: Props) {
         <div className="bg-white rounded-3xl border border-gray-100 shadow-sm p-6 md:p-8 space-y-6 animate-in fade-in duration-300">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
             <div>
-              <h2 className="text-xl font-bold text-gray-900">System Activity Audit Log</h2>
-              <p className="text-xs text-gray-500">
-                Chronological tamper-evident audit trail of all staff, manager, and customer actions
+              <div className="flex items-center gap-2">
+                <h2 className="text-xl font-bold text-gray-900">System Activity Audit Log</h2>
+                <span className="text-xs font-black bg-gray-100 text-gray-700 px-2 py-0.5 rounded-full">
+                  {data.logs.length}
+                </span>
+              </div>
+              <p className="text-xs text-gray-500 mt-0.5">
+                Real-time chronological audit trail of all actions across admin, manager, staff, and customer roles
               </p>
             </div>
 
-            <div className="relative max-w-xs w-full">
-              <Search className="w-4 h-4 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2" />
-              <input
-                type="text"
-                placeholder="Filter logs by action, actor or entity..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full pl-9 pr-4 py-2 bg-gray-50 border border-gray-200 rounded-xl text-xs font-medium text-gray-800 focus:outline-none focus:ring-2 focus:ring-[#22C55E]"
-              />
+            <div className="flex items-center gap-2">
+              <div className="relative max-w-xs w-full">
+                <Search className="w-4 h-4 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                <input
+                  type="text"
+                  placeholder="Filter logs by action, actor, role..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="w-full pl-9 pr-4 py-2 bg-gray-50 border border-gray-200 rounded-xl text-xs font-medium text-gray-800 focus:outline-none focus:ring-2 focus:ring-[#22C55E]"
+                />
+              </div>
+
+              <button
+                type="button"
+                disabled={refreshingLogs}
+                onClick={() => refreshLogs(false)}
+                className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl border border-gray-200 hover:bg-gray-100 text-gray-700 text-xs font-bold transition-all cursor-pointer shadow-xs disabled:opacity-50 shrink-0"
+                title="Refresh latest activity logs"
+              >
+                <RotateCw className={`w-3.5 h-3.5 ${refreshingLogs ? 'animate-spin text-[#22C55E]' : 'text-gray-500'}`} />
+                <span>{refreshingLogs ? 'Updating...' : 'Refresh'}</span>
+              </button>
             </div>
+          </div>
+
+          {/* Role Filter Tabs */}
+          <div className="flex items-center gap-1.5 overflow-x-auto pb-1">
+            <span className="text-xs font-bold text-gray-400 uppercase tracking-wider mr-1">Role:</span>
+            {[
+              { id: 'all', label: 'All Roles' },
+              { id: 'admin', label: 'Admin', color: 'bg-purple-100 text-purple-800 border-purple-200' },
+              { id: 'manager', label: 'Manager', color: 'bg-blue-100 text-blue-800 border-blue-200' },
+              { id: 'staff', label: 'Staff', color: 'bg-amber-100 text-amber-800 border-amber-200' },
+              { id: 'customer', label: 'Customer', color: 'bg-emerald-100 text-emerald-800 border-emerald-200' },
+            ].map((rf) => {
+              const isSelected = logRoleFilter === rf.id
+              const count = rf.id === 'all'
+                ? data.logs.length
+                : data.logs.filter((l) => (l.actor_role || '').toLowerCase() === rf.id).length
+
+              return (
+                <button
+                  key={rf.id}
+                  type="button"
+                  onClick={() => setLogRoleFilter(rf.id as any)}
+                  className={`px-3 py-1 rounded-xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap border flex items-center gap-1.5 ${
+                    isSelected
+                      ? 'bg-gray-900 text-white border-gray-900 shadow-xs'
+                      : 'bg-gray-50 text-gray-600 border-gray-200 hover:bg-gray-100'
+                  }`}
+                >
+                  <span>{rf.label}</span>
+                  <span className={`text-[10px] px-1.5 py-0.2 rounded-full font-black ${
+                    isSelected ? 'bg-white/20 text-white' : 'bg-gray-200 text-gray-700'
+                  }`}>
+                    {count}
+                  </span>
+                </button>
+              )
+            })}
           </div>
 
           <div className="overflow-x-auto rounded-2xl border border-gray-100">
@@ -1024,8 +1166,9 @@ export default function AdminPanelClient({ initialData, adminEmail }: Props) {
               <thead className="bg-gray-50 text-gray-500 uppercase text-[11px] font-bold tracking-wider border-b border-gray-200">
                 <tr>
                   <th className="py-3.5 px-4">Timestamp</th>
-                  <th className="py-3.5 px-4">Action</th>
+                  <th className="py-3.5 px-4">Role</th>
                   <th className="py-3.5 px-4">Actor</th>
+                  <th className="py-3.5 px-4">Action</th>
                   <th className="py-3.5 px-4">Entity</th>
                   <th className="py-3.5 px-4">Target ID</th>
                 </tr>
@@ -1033,10 +1176,10 @@ export default function AdminPanelClient({ initialData, adminEmail }: Props) {
               <tbody className="divide-y divide-gray-100 font-medium text-xs">
                 {filteredLogs.length === 0 ? (
                   <tr>
-                    <td colSpan={5} className="py-12 text-center text-gray-400">
+                    <td colSpan={6} className="py-12 text-center text-gray-400">
                       <FileText className="w-8 h-8 mx-auto mb-2 text-gray-300" />
                       <p className="text-sm font-semibold text-gray-600">No activity logs found</p>
-                      <p className="text-xs text-gray-400 mt-1">No logs match the current search criteria.</p>
+                      <p className="text-xs text-gray-400 mt-1">No activities match your current search and role filters.</p>
                     </td>
                   </tr>
                 ) : (
@@ -1044,10 +1187,11 @@ export default function AdminPanelClient({ initialData, adminEmail }: Props) {
                     const isCreate = l.action.toLowerCase().includes('create') || l.action.toLowerCase().includes('insert')
                     const isDelete = l.action.toLowerCase().includes('delete') || l.action.toLowerCase().includes('cancel')
                     const isUpdate = l.action.toLowerCase().includes('update') || l.action.toLowerCase().includes('call')
+                    const role = (l.actor_role || 'system').toLowerCase()
 
                     return (
                       <tr key={l.id} className="hover:bg-gray-50/80 transition-colors">
-                        <td className="py-3 px-4 text-gray-500 font-mono text-[11px]">
+                        <td className="py-3 px-4 text-gray-500 font-mono text-[11px] whitespace-nowrap">
                           {new Date(l.created_at).toLocaleString([], {
                             month: 'short',
                             day: 'numeric',
@@ -1055,6 +1199,27 @@ export default function AdminPanelClient({ initialData, adminEmail }: Props) {
                             minute: '2-digit',
                             second: '2-digit',
                           })}
+                        </td>
+                        <td className="py-3 px-4">
+                          <span
+                            className={`inline-block text-[10px] font-extrabold uppercase px-2 py-0.5 rounded border ${
+                              role === 'admin'
+                                ? 'bg-purple-50 text-purple-700 border-purple-200'
+                                : role === 'manager'
+                                ? 'bg-blue-50 text-blue-700 border-blue-200'
+                                : role === 'staff'
+                                ? 'bg-amber-50 text-amber-700 border-amber-200'
+                                : role === 'customer'
+                                ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                                : 'bg-gray-100 text-gray-600 border-gray-200'
+                            }`}
+                          >
+                            {role}
+                          </span>
+                        </td>
+                        <td className="py-3 px-4">
+                          <div className="font-semibold text-gray-900">{l.actor_name}</div>
+                          <div className="text-[10px] text-gray-400 truncate max-w-[200px] font-mono">{l.actor_email}</div>
                         </td>
                         <td className="py-3 px-4">
                           <span
@@ -1070,10 +1235,6 @@ export default function AdminPanelClient({ initialData, adminEmail }: Props) {
                           >
                             {l.action}
                           </span>
-                        </td>
-                        <td className="py-3 px-4">
-                          <div className="font-semibold text-gray-900">{l.actor_name}</div>
-                          <div className="text-[10px] text-gray-400 truncate max-w-[200px] font-mono">{l.actor_email}</div>
                         </td>
                         <td className="py-3 px-4 text-gray-700 capitalize font-medium">{l.entity || '—'}</td>
                         <td className="py-3 px-4 text-gray-400 font-mono text-[11px]">
@@ -1161,6 +1322,90 @@ export default function AdminPanelClient({ initialData, adminEmail }: Props) {
                     className="w-full bg-gray-50 border border-gray-200 rounded-xl px-3 py-2 text-sm font-semibold text-gray-800"
                   />
                 </div>
+              </div>
+
+              {/* Working Days Selector */}
+              <div className="pt-2 border-t border-gray-100">
+                <div className="flex items-center justify-between mb-1.5">
+                  <label className="block text-xs font-bold uppercase text-gray-700 flex items-center gap-1.5">
+                    <Calendar className="w-3.5 h-3.5 text-emerald-600" />
+                    Working Days for Appointments
+                  </label>
+                  <div className="flex items-center gap-1">
+                    <button
+                      type="button"
+                      onClick={() => setDeptForm({ ...deptForm, working_days: [1, 2, 3, 4, 5] })}
+                      className="px-2 py-0.5 rounded text-[10px] font-semibold bg-gray-100 hover:bg-emerald-50 hover:text-emerald-700 text-gray-600 cursor-pointer transition-colors"
+                    >
+                      Mon–Fri
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setDeptForm({ ...deptForm, working_days: [1, 2, 3, 4, 5, 6] })}
+                      className="px-2 py-0.5 rounded text-[10px] font-semibold bg-gray-100 hover:bg-emerald-50 hover:text-emerald-700 text-gray-600 cursor-pointer transition-colors"
+                    >
+                      Mon–Sat
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setDeptForm({ ...deptForm, working_days: [0, 1, 2, 3, 4, 5, 6] })}
+                      className="px-2 py-0.5 rounded text-[10px] font-semibold bg-gray-100 hover:bg-emerald-50 hover:text-emerald-700 text-gray-600 cursor-pointer transition-colors"
+                    >
+                      All 7
+                    </button>
+                  </div>
+                </div>
+
+                <p className="text-[11px] text-gray-500 mb-2">
+                  Select which days are open for customer appointments. Days set to <strong className="text-gray-700 font-semibold">OFF</strong> will automatically lock slots and display an <strong className="text-rose-600 font-semibold">&ldquo;OFF&rdquo;</strong> label to users.
+                </p>
+
+                <div className="grid grid-cols-7 gap-1.5">
+                  {[
+                    { val: 1, label: 'Mon', full: 'Monday' },
+                    { val: 2, label: 'Tue', full: 'Tuesday' },
+                    { val: 3, label: 'Wed', full: 'Wednesday' },
+                    { val: 4, label: 'Thu', full: 'Thursday' },
+                    { val: 5, label: 'Fri', full: 'Friday' },
+                    { val: 6, label: 'Sat', full: 'Saturday' },
+                    { val: 0, label: 'Sun', full: 'Sunday' },
+                  ].map((day) => {
+                    const isSelected = deptForm.working_days.includes(day.val)
+                    return (
+                      <button
+                        key={day.val}
+                        type="button"
+                        onClick={() => {
+                          const current = deptForm.working_days
+                          const next = isSelected
+                            ? current.filter((v) => v !== day.val)
+                            : [...current, day.val]
+                          setDeptForm({ ...deptForm, working_days: next })
+                        }}
+                        className={`py-2 px-1 rounded-xl text-center border font-bold transition-all cursor-pointer ${
+                          isSelected
+                            ? 'bg-[#22C55E] text-white border-[#16A34A] shadow-xs'
+                            : 'bg-gray-50 text-gray-400 border-gray-200 hover:bg-gray-100'
+                        }`}
+                        title={`${day.full}: ${isSelected ? 'Working (Slots ON)' : 'OFF (Slots Locked)'}`}
+                      >
+                        <span className="block text-[10px] uppercase">{day.label}</span>
+                        <span
+                          className={`inline-block text-[9px] font-extrabold px-1 rounded mt-0.5 ${
+                            isSelected
+                              ? 'bg-emerald-700/40 text-emerald-100'
+                              : 'bg-gray-200 text-gray-500'
+                          }`}
+                        >
+                          {isSelected ? 'ON' : 'OFF'}
+                        </span>
+                      </button>
+                    )
+                  })}
+                </div>
+                {deptForm.working_days.length === 0 && (
+                  <p className="text-rose-500 text-xs mt-1.5 font-medium">Please select at least one working day.</p>
+                )}
               </div>
             </div>
 

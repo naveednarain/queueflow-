@@ -15,6 +15,7 @@ import {
   Ticket,
   AlertCircle,
   Loader2,
+  Lock,
 } from 'lucide-react'
 import Link from 'next/link'
 import { toast } from 'sonner'
@@ -76,25 +77,43 @@ export default function BookWizard({ departments, userEmail }: Props) {
   // Selected department and service objects
   const currentDept = departments.find((d) => d.id === selectedDeptId)
   const currentService = currentDept?.services.find((s) => s.id === selectedServiceId)
+  const deptWorkingDays = currentDept?.working_days ?? [1, 2, 3, 4, 5]
+
+  // Check if selectedDate is a working day
+  const isSelectedDateWorkingDay = (() => {
+    if (!selectedDate) return false
+    const [y, m, dayNum] = selectedDate.split('-').map(Number)
+    const dow = new Date(y, m - 1, dayNum).getDay()
+    return deptWorkingDays.includes(dow)
+  })()
 
   // Fetch slots whenever service or date changes in step 3
   useEffect(() => {
-    if (selectedServiceId && selectedDate) {
-      setLoadingSlots(true)
-      setSelectedSlot(null)
-      getAvailableSlots(selectedServiceId, selectedDate)
-        .then((data) => {
-          setSlots(data || [])
-        })
-        .catch(() => {
-          toast.error('Failed to load slots for this date')
-          setSlots([])
-        })
-        .finally(() => {
-          setLoadingSlots(false)
-        })
+    if (!selectedServiceId || !selectedDate) return
+
+    setSelectedSlot(null)
+
+    const [y, m, dayNum] = selectedDate.split('-').map(Number)
+    const dow = new Date(y, m - 1, dayNum).getDay()
+    if (!deptWorkingDays.includes(dow)) {
+      setSlots([])
+      setLoadingSlots(false)
+      return
     }
-  }, [selectedServiceId, selectedDate])
+
+    setLoadingSlots(true)
+    getAvailableSlots(selectedServiceId, selectedDate)
+      .then((data) => {
+        setSlots(data || [])
+      })
+      .catch(() => {
+        toast.error('Failed to load slots for this date')
+        setSlots([])
+      })
+      .finally(() => {
+        setLoadingSlots(false)
+      })
+  }, [selectedServiceId, selectedDate, deptWorkingDays])
 
   const handleSelectDepartment = (deptId: string) => {
     setSelectedDeptId(deptId)
@@ -106,13 +125,31 @@ export default function BookWizard({ departments, userEmail }: Props) {
   const handleSelectService = (serviceId: string) => {
     setSelectedServiceId(serviceId)
     setSelectedSlot(null)
-    // Default to tomorrow (index 1) so slots are guaranteed to be open even after hours, with Today at index 0
-    setSelectedDate(next7Days[1]?.isoDate || next7Days[0].isoDate)
+
+    const dept = departments.find((d) => d.id === selectedDeptId)
+    const workingDays = dept?.working_days ?? [1, 2, 3, 4, 5]
+
+    // Find the next available working day from tomorrow (index 1) or today (index 0)
+    const firstWorking =
+      next7Days.slice(1).find((d) => {
+        const [y, m, dayNum] = d.isoDate.split('-').map(Number)
+        return workingDays.includes(new Date(y, m - 1, dayNum).getDay())
+      }) ||
+      next7Days.find((d) => {
+        const [y, m, dayNum] = d.isoDate.split('-').map(Number)
+        return workingDays.includes(new Date(y, m - 1, dayNum).getDay())
+      })
+
+    setSelectedDate(firstWorking?.isoDate || next7Days[0].isoDate)
     setStep(3)
   }
 
   const handleConfirmBooking = async () => {
     if (!selectedServiceId || !selectedDate || !selectedSlot || bookingPending) return
+    if (!isSelectedDateWorkingDay) {
+      toast.error('Department is closed on this day (Off Day)')
+      return
+    }
     setBookingPending(true)
 
     try {
@@ -311,31 +348,76 @@ export default function BookWizard({ departments, userEmail }: Props) {
 
             {/* Date Carousel (Next 7 Days) */}
             <div>
-              <label className="block text-xs font-bold uppercase tracking-wider text-gray-500 mb-2">
-                1. Select Date (Next 7 Days)
-              </label>
+              <div className="flex items-center justify-between mb-2">
+                <label className="block text-xs font-bold uppercase tracking-wider text-gray-500">
+                  1. Select Date (Next 7 Days)
+                </label>
+                <span className="text-[11px] text-gray-400 font-medium">
+                  Days marked <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded font-extrabold text-rose-700 bg-rose-100 border border-rose-200 uppercase text-[10px]"><Lock className="w-2.5 h-2.5" /> OFF</span> are closed
+                </span>
+              </div>
 
               <div className="grid grid-cols-4 sm:grid-cols-7 gap-2">
-                {next7Days.map((d) => (
-                  <button
-                    key={d.isoDate}
-                    type="button"
-                    onClick={() => setSelectedDate(d.isoDate)}
-                    className={`p-3 rounded-2xl border text-center transition-all cursor-pointer ${
-                      selectedDate === d.isoDate
-                        ? 'bg-[#22C55E] text-white border-[#22C55E] shadow-md shadow-green-200 font-bold scale-[1.03]'
-                        : 'bg-gray-50 hover:bg-gray-100 text-gray-700 border-gray-200'
-                    }`}
-                  >
-                    <span className="block text-[11px] uppercase opacity-80">{d.weekday}</span>
-                    <span className="block text-sm font-bold mt-0.5">{d.dayMonth}</span>
-                    {d.isToday && (
-                      <span className={`block text-[9px] mt-1 font-semibold ${selectedDate === d.isoDate ? 'text-green-100' : 'text-[#22C55E]'}`}>
-                        Today
-                      </span>
-                    )}
-                  </button>
-                ))}
+                {next7Days.map((d) => {
+                  const [y, m, dayNum] = d.isoDate.split('-').map(Number)
+                  const dayOfWeek = new Date(y, m - 1, dayNum).getDay()
+                  const isWorking = deptWorkingDays.includes(dayOfWeek)
+                  const isSelected = selectedDate === d.isoDate
+
+                  return (
+                    <button
+                      key={d.isoDate}
+                      type="button"
+                      onClick={() => {
+                        setSelectedDate(d.isoDate)
+                        setSelectedSlot(null)
+                      }}
+                      className={`p-3 rounded-2xl border text-center transition-all cursor-pointer relative ${
+                        isSelected
+                          ? isWorking
+                            ? 'bg-[#22C55E] text-white border-[#22C55E] shadow-md shadow-green-200 font-bold scale-[1.03]'
+                            : 'bg-gray-900 text-white border-gray-900 shadow-md font-bold scale-[1.03]'
+                          : isWorking
+                          ? 'bg-gray-50 hover:bg-gray-100 text-gray-700 border-gray-200'
+                          : 'bg-rose-50/40 hover:bg-rose-50 text-gray-700 border-rose-200/70'
+                      }`}
+                    >
+                      <div className="flex items-center justify-center gap-1">
+                        <span className="block text-[11px] uppercase opacity-80">{d.weekday}</span>
+                      </div>
+
+                      <span className="block text-sm font-bold mt-0.5">{d.dayMonth}</span>
+
+                      {!isWorking ? (
+                        <span
+                          className={`inline-flex items-center justify-center gap-1 text-[10px] font-black px-2 py-0.5 rounded-md mt-1 tracking-wider uppercase ${
+                            isSelected
+                              ? 'bg-rose-600 text-white shadow-xs'
+                              : 'bg-rose-100 text-rose-700 border border-rose-200'
+                          }`}
+                        >
+                          <Lock className="w-2.5 h-2.5" /> OFF
+                        </span>
+                      ) : d.isToday ? (
+                        <span
+                          className={`block text-[10px] mt-1 font-semibold ${
+                            isSelected ? 'text-green-100' : 'text-[#22C55E]'
+                          }`}
+                        >
+                          Today
+                        </span>
+                      ) : (
+                        <span
+                          className={`block text-[10px] mt-1 font-medium ${
+                            isSelected ? 'text-green-100' : 'text-gray-400'
+                          }`}
+                        >
+                          Open
+                        </span>
+                      )}
+                    </button>
+                  )
+                })}
               </div>
             </div>
 
@@ -345,12 +427,54 @@ export default function BookWizard({ departments, userEmail }: Props) {
                 <label className="text-xs font-bold uppercase tracking-wider text-gray-500">
                   2. Select Time Slot
                 </label>
-                <span className="text-xs text-gray-400">
-                  Capacity: max {slots[0]?.max_capacity ?? 4} per slot
-                </span>
+                {isSelectedDateWorkingDay && (
+                  <span className="text-xs text-gray-400">
+                    Capacity: max {slots[0]?.max_capacity ?? 4} per slot
+                  </span>
+                )}
               </div>
 
-              {loadingSlots ? (
+              {!isSelectedDateWorkingDay ? (
+                <div className="py-8 px-6 text-center bg-gray-50 rounded-2xl border-2 border-dashed border-gray-200">
+                  <div className="w-12 h-12 rounded-2xl bg-amber-50 border border-amber-200 text-amber-600 flex items-center justify-center mx-auto mb-3 shadow-2xs">
+                    <Lock className="w-6 h-6" />
+                  </div>
+                  <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-rose-50 border border-rose-200 text-rose-700 text-xs font-bold mb-2">
+                    <span className="w-2 h-2 rounded-full bg-rose-500 animate-pulse"></span>
+                    DAY OFF · SLOTS ARE OFF
+                  </div>
+                  <h4 className="text-base font-bold text-gray-900 mb-1">
+                    {currentDept.name} is Closed on{' '}
+                    {selectedDate &&
+                      new Date(
+                        Number(selectedDate.split('-')[0]),
+                        Number(selectedDate.split('-')[1]) - 1,
+                        Number(selectedDate.split('-')[2])
+                      ).toLocaleDateString([], { weekday: 'long' })}
+                    s (OFF)
+                  </h4>
+                  <p className="text-xs text-gray-500 max-w-md mx-auto mb-4">
+                    Online appointment slots are locked and unavailable for this day. Please select an active working day from the calendar above to view open slots.
+                  </p>
+
+                  {/* Visual locked slot indicators */}
+                  <div className="max-w-md mx-auto grid grid-cols-2 sm:grid-cols-3 gap-2 opacity-50 pointer-events-none select-none">
+                    {['09:00 AM', '10:00 AM', '11:00 AM', '02:00 PM', '03:00 PM', '04:00 PM'].map(
+                      (t) => (
+                        <div
+                          key={t}
+                          className="p-2.5 rounded-xl border border-gray-200 bg-gray-100 flex items-center justify-between text-gray-400"
+                        >
+                          <span className="text-xs font-mono font-bold">{t}</span>
+                          <span className="inline-flex items-center gap-0.5 text-[9px] font-bold bg-gray-200 text-gray-500 px-1 py-0.5 rounded">
+                            <Lock className="w-2.5 h-2.5" /> OFF
+                          </span>
+                        </div>
+                      )
+                    )}
+                  </div>
+                </div>
+              ) : loadingSlots ? (
                 <div className="py-12 flex flex-col items-center justify-center text-gray-400">
                   <Loader2 className="w-6 h-6 animate-spin text-[#22C55E] mb-2" />
                   <span className="text-xs font-medium">Checking available time slots...</span>
