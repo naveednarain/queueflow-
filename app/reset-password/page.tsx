@@ -1,19 +1,60 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
-import { Ticket, Eye, EyeOff, Loader2, KeyRound, CheckCircle2 } from 'lucide-react'
-import { resetPassword } from '@/lib/actions/auth'
+import { Ticket, Eye, EyeOff, Loader2, KeyRound, CheckCircle2, AlertTriangle } from 'lucide-react'
+import { createClient } from '@/lib/supabase/client'
 
 export default function ResetPasswordPage() {
   const router = useRouter()
+  const [supabase] = useState(() => createClient())
   const [password, setPassword] = useState('')
   const [confirmPassword, setConfirmPassword] = useState('')
   const [showPassword, setShowPassword] = useState(false)
   const [loading, setLoading] = useState(false)
+  const [checkingSession, setCheckingSession] = useState(true)
+  const [hasValidSession, setHasValidSession] = useState(false)
   const [done, setDone] = useState(false)
+
+  useEffect(() => {
+    async function checkAuth() {
+      try {
+        // If there's a code in search params (PKCE flow)
+        if (typeof window !== 'undefined') {
+          const url = new URL(window.location.href)
+          const code = url.searchParams.get('code')
+          if (code) {
+            await supabase.auth.exchangeCodeForSession(code)
+          }
+        }
+
+        const { data: { session } } = await supabase.auth.getSession()
+        if (session) {
+          setHasValidSession(true)
+        } else {
+          // Listen to state change in case hash is being processed by Supabase
+          const { data: authListener } = supabase.auth.onAuthStateChange(
+            (event, session) => {
+              if (event === 'PASSWORD_RECOVERY' || session) {
+                setHasValidSession(true)
+              }
+            }
+          )
+          return () => {
+            authListener.subscription.unsubscribe()
+          }
+        }
+      } catch (err) {
+        console.error('Session check error:', err)
+      } finally {
+        setCheckingSession(false)
+      }
+    }
+
+    checkAuth()
+  }, [supabase])
 
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault()
@@ -31,9 +72,12 @@ export default function ResetPasswordPage() {
 
     setLoading(true)
     try {
-      const res = await resetPassword(password)
-      if (res?.error) {
-        toast.error(res.error)
+      const { error } = await supabase.auth.updateUser({
+        password: password,
+      })
+
+      if (error) {
+        toast.error(error.message || 'Failed to update password.')
       } else {
         setDone(true)
         toast.success('Your password has been updated successfully!')
@@ -58,7 +102,12 @@ export default function ResetPasswordPage() {
       </Link>
 
       <div className="w-full max-w-md bg-white rounded-2xl shadow-sm border border-gray-100 p-8">
-        {done ? (
+        {checkingSession ? (
+          <div className="text-center py-8">
+            <Loader2 className="w-8 h-8 animate-spin text-[#22C55E] mx-auto mb-3" />
+            <p className="text-sm text-gray-500">Verifying security token…</p>
+          </div>
+        ) : done ? (
           <div className="text-center py-4">
             <div className="w-12 h-12 rounded-full bg-emerald-100 text-emerald-600 flex items-center justify-center mx-auto mb-4">
               <CheckCircle2 className="w-6 h-6" />
@@ -72,6 +121,22 @@ export default function ResetPasswordPage() {
               className="inline-flex items-center justify-center w-full bg-[#22C55E] text-white font-semibold py-2.5 px-4 rounded-xl hover:bg-[#16A34A] transition shadow-lg shadow-green-200"
             >
               Go to Sign in
+            </Link>
+          </div>
+        ) : !hasValidSession ? (
+          <div className="text-center py-4">
+            <div className="w-12 h-12 rounded-full bg-amber-100 text-amber-600 flex items-center justify-center mx-auto mb-4">
+              <AlertTriangle className="w-6 h-6" />
+            </div>
+            <h1 className="text-xl font-bold text-gray-900 mb-2">Invalid or Expired Link</h1>
+            <p className="text-sm text-gray-600 mb-6">
+              This recovery link is invalid or has expired. Please request a new recovery link from the login page.
+            </p>
+            <Link
+              href="/login"
+              className="inline-flex items-center justify-center w-full bg-[#22C55E] text-white font-semibold py-2.5 px-4 rounded-xl hover:bg-[#16A34A] transition shadow-lg shadow-green-200"
+            >
+              Back to Login
             </Link>
           </div>
         ) : (
