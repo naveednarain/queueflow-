@@ -3,8 +3,8 @@
 import Link from 'next/link'
 import { useState } from 'react'
 import { toast } from 'sonner'
-import { Ticket, Eye, EyeOff, Loader2, ArrowLeft } from 'lucide-react'
-import { login } from '@/lib/actions/auth'
+import { Ticket, Eye, EyeOff, Loader2, ArrowLeft, KeyRound, MailCheck } from 'lucide-react'
+import { login, requestPasswordReset } from '@/lib/actions/auth'
 import { useSearchParams, useRouter } from 'next/navigation'
 
 export default function LoginForm() {
@@ -16,12 +16,37 @@ export default function LoginForm() {
   const [showPassword, setShowPassword] = useState(false)
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
+  const [failedAttempts, setFailedAttempts] = useState(0)
+  const [sendingReset, setSendingReset] = useState(false)
+  const [resetSent, setResetSent] = useState(false)
 
   const handleBack = () => {
     if (typeof window !== 'undefined' && window.history.length > 1) {
       router.back()
     } else {
       router.push('/')
+    }
+  }
+
+  async function handlePasswordRecovery() {
+    if (!email || !email.includes('@')) {
+      toast.error('Please enter your email address first.')
+      return
+    }
+    setSendingReset(true)
+    try {
+      const redirectUrl = typeof window !== 'undefined' ? `${window.location.origin}/reset-password` : undefined
+      const res = await requestPasswordReset(email, redirectUrl)
+      if (res?.error) {
+        toast.error(res.error)
+      } else {
+        setResetSent(true)
+        toast.success('Password recovery link sent to your email!')
+      }
+    } catch {
+      toast.error('Failed to send recovery email. Please try again.')
+    } finally {
+      setSendingReset(false)
     }
   }
 
@@ -34,6 +59,7 @@ export default function LoginForm() {
       const result = await login(formData)
       if (result?.error) {
         toast.error(result.error)
+        setFailedAttempts((prev) => prev + 1)
         setLoading(false)
       }
     } catch {
@@ -133,6 +159,37 @@ export default function LoginForm() {
               </button>
             </div>
           </div>
+
+          {/* Conditionally shown ONLY after 1 or more failed attempts */}
+          {failedAttempts >= 1 && (
+            <div className="p-3.5 bg-amber-50/90 border border-amber-200/80 rounded-xl flex items-start gap-2.5 animate-in fade-in slide-in-from-top-1 duration-200">
+              <KeyRound className="w-4 h-4 text-amber-600 mt-0.5 shrink-0" />
+              <div className="flex-1 text-xs">
+                <p className="text-amber-900 font-medium mb-1">
+                  Trouble signing in?
+                </p>
+                {resetSent ? (
+                  <div className="flex items-center gap-1.5 text-emerald-700 font-medium">
+                    <MailCheck className="w-3.5 h-3.5" />
+                    <span>Recovery link sent to your email!</span>
+                  </div>
+                ) : (
+                  <div className="flex items-center justify-between gap-2 mt-1">
+                    <span className="text-amber-700">Forgot your password?</span>
+                    <button
+                      type="button"
+                      onClick={handlePasswordRecovery}
+                      disabled={sendingReset}
+                      className="font-semibold text-emerald-600 hover:text-emerald-700 underline cursor-pointer disabled:opacity-50 inline-flex items-center gap-1"
+                    >
+                      {sendingReset && <Loader2 className="w-3 h-3 animate-spin" />}
+                      {sendingReset ? 'Sending…' : 'Send recovery link'}
+                    </button>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
 
           <button
             id="login-submit-btn"

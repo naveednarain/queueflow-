@@ -78,6 +78,42 @@ export async function register(formData: FormData) {
   redirect('/')
 }
 
+export async function requestPasswordReset(email: string, redirectTo?: string) {
+  const parsed = z.string().email('Please enter a valid email address.').safeParse(email)
+  if (!parsed.success) {
+    return { error: parsed.error.issues[0].message }
+  }
+
+  const supabase = await createClient()
+  const { error } = await supabase.auth.resetPasswordForEmail(parsed.data, {
+    redirectTo: redirectTo || `${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}/reset-password`,
+  })
+
+  if (error) {
+    return { error: error.message || 'Unable to send recovery email. Please try again.' }
+  }
+
+  return { success: true }
+}
+
+export async function resetPassword(password: string) {
+  const parsed = z.string().min(8, 'Password must be at least 8 characters.').safeParse(password)
+  if (!parsed.success) {
+    return { error: parsed.error.issues[0].message }
+  }
+
+  const supabase = await createClient()
+  const { error } = await supabase.auth.updateUser({
+    password: parsed.data,
+  })
+
+  if (error) {
+    return { error: error.message || 'Failed to update password.' }
+  }
+
+  return { success: true }
+}
+
 export async function logout() {
   const supabase = await createClient()
   await supabase.auth.signOut()
