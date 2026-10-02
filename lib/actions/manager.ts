@@ -103,51 +103,31 @@ export async function getManagementData(): Promise<{
 }> {
   const supabase = await createClient()
 
-  // 1. Fetch counters
-  const { data: counters } = await supabase
-    .from('counters')
-    .select(`
-      id,
-      name,
-      status,
-      service_id,
-      assigned_staff,
-      department_id,
-      departments(name),
-      services(name),
-      profiles(name)
-    `)
-    .order('name')
+  // All 4 queries run in parallel — previously sequential
+  const [countersRes, servicesRes, departmentsRes, staffRes] = await Promise.all([
+    supabase
+      .from('counters')
+      .select('id, name, status, service_id, assigned_staff, department_id, departments(name), services(name), profiles(name)')
+      .order('name'),
 
-  // 2. Fetch services
-  const { data: services } = await supabase
-    .from('services')
-    .select(`
-      id,
-      department_id,
-      name,
-      prefix,
-      avg_duration,
-      priority_level,
-      active,
-      departments(name)
-    `)
-    .order('name')
+    supabase
+      .from('services')
+      .select('id, department_id, name, prefix, avg_duration, priority_level, active, departments(name)')
+      .order('name'),
 
-  // 3. Fetch departments
-  const { data: departments } = await supabase
-    .from('departments')
-    .select('*')
-    .order('name')
+    supabase
+      .from('departments')
+      .select('id, name, open_time, close_time, slot_minutes, max_per_slot')
+      .order('name'),
 
-  // 4. Fetch staff profiles
-  const { data: staffList } = await supabase
-    .from('profiles')
-    .select('id, name, email, role')
-    .in('role', ['staff', 'manager', 'admin'])
-    .order('name')
+    supabase
+      .from('profiles')
+      .select('id, name, email, role')
+      .in('role', ['staff', 'manager', 'admin'])
+      .order('name'),
+  ])
 
-  const formattedCounters: ManagerCounterItem[] = (counters ?? []).map((c: any) => ({
+  const formattedCounters: ManagerCounterItem[] = (countersRes.data ?? []).map((c: any) => ({
     id: c.id,
     name: c.name,
     status: c.status,
@@ -159,7 +139,7 @@ export async function getManagementData(): Promise<{
     staff_name: c.profiles?.name ?? '',
   }))
 
-  const formattedServices: ManagerServiceItem[] = (services ?? []).map((s: any) => ({
+  const formattedServices: ManagerServiceItem[] = (servicesRes.data ?? []).map((s: any) => ({
     id: s.id,
     department_id: s.department_id,
     department_name: s.departments?.name ?? '',
@@ -173,8 +153,8 @@ export async function getManagementData(): Promise<{
   return {
     counters: formattedCounters,
     services: formattedServices,
-    departments: (departments ?? []) as ManagerDepartmentItem[],
-    staffList: (staffList ?? []) as any[],
+    departments: (departmentsRes.data ?? []) as ManagerDepartmentItem[],
+    staffList: (staffRes.data ?? []) as any[],
   }
 }
 

@@ -27,13 +27,11 @@ export default async function ManagerPage() {
     redirect('/login?message=You need manager access to view that page.')
   }
 
-  // Lazily clean up missed appointments
-  await markMissedAppointments().catch(() => {})
-
-  // Fetch initial dashboard stats & management configuration
+  // All 3 run in parallel: stats, management config, and maintenance cleanup
   const [statsRes, mgmtData] = await Promise.all([
     fetchDashboardStats(),
     getManagementData(),
+    markMissedAppointments().catch(() => {}),
   ])
 
   return (

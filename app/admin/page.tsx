@@ -15,17 +15,15 @@ export default async function AdminPage() {
 
   if (!user) redirect('/login?message=Please sign in.')
 
-  const { data: profile } = await supabase
-    .from('profiles')
-    .select('*')
-    .eq('id', user.id)
-    .single<Profile>()
+  // Parallel: profile + all admin data in one shot
+  const [{ data: profile }, adminData] = await Promise.all([
+    supabase.from('profiles').select('id, name, email, role, account_status').eq('id', user.id).single<Profile>(),
+    getAdminData(),
+  ])
 
   if (!profile || profile.role !== 'admin') {
     redirect('/login?message=You need administrator access to view that page.')
   }
-
-  const adminData = await getAdminData()
 
   return (
     <div className="min-h-screen flex flex-col bg-[#F5F5F5]">
