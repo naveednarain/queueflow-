@@ -18,6 +18,7 @@ import {
   Layers,
   ChevronDown,
   Info,
+  Check,
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { createClient } from '@/lib/supabase/client'
@@ -190,20 +191,39 @@ export default function StaffClient({ initialCounters, userEmail, userRole }: Pr
 
   // ── Handlers ──────────────────────────────────────────────────
   const handleStatusChange = async (newStatus: 'available' | 'busy' | 'break' | 'closed') => {
-    if (!activeCounter) return
-    setActionPending(true)
+    if (!activeCounter || activeCounter.status === newStatus) return
+
+    const previousStatus = activeCounter.status
+    const counterId = activeCounter.id
+
+    // 1. OPTIMISTIC UPDATE: Update local state immediately (0ms instant UI feedback!)
+    setCounters((prev) =>
+      prev.map((c) =>
+        c.id === counterId ? { ...c, status: newStatus } : c
+      )
+    )
+
     try {
-      const res = await setCounterStatus(activeCounter.id, newStatus)
+      const res = await setCounterStatus(counterId, newStatus)
       if (!res.success) {
+        // Rollback on server error
+        setCounters((prev) =>
+          prev.map((c) =>
+            c.id === counterId ? { ...c, status: previousStatus } : c
+          )
+        )
         toast.error(res.error || 'Failed to update counter status')
       } else {
-        toast.success(`Counter status set to ${newStatus}`)
-        await refreshCounter()
+        toast.success(`Counter status set to ${newStatus === 'available' ? 'Ready / Available' : newStatus}`)
       }
     } catch {
+      // Rollback on network failure
+      setCounters((prev) =>
+        prev.map((c) =>
+          c.id === counterId ? { ...c, status: previousStatus } : c
+        )
+      )
       toast.error('An unexpected error occurred')
-    } finally {
-      setActionPending(false)
     }
   }
 
@@ -413,55 +433,60 @@ export default function StaffClient({ initialCounters, userEmail, userRole }: Pr
               </span>
             </div>
 
-            <div className="inline-flex rounded-xl bg-gray-100 p-1 border border-gray-200 gap-1">
-              <button
-                type="button"
-                onClick={() => handleStatusChange('available')}
-                disabled={actionPending || activeCounter.status === 'available'}
-                className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
-                  activeCounter.status === 'available'
-                    ? 'bg-white text-emerald-700 shadow-xs'
-                    : 'text-gray-600 hover:text-gray-900'
-                }`}
-              >
-                🟢 Available
-              </button>
-              <button
-                type="button"
-                onClick={() => handleStatusChange('busy')}
-                disabled={actionPending || activeCounter.status === 'busy'}
-                className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
-                  activeCounter.status === 'busy'
-                    ? 'bg-white text-blue-700 shadow-xs'
-                    : 'text-gray-600 hover:text-gray-900'
-                }`}
-              >
-                🔵 Busy
-              </button>
-              <button
-                type="button"
-                onClick={() => handleStatusChange('break')}
-                disabled={actionPending || activeCounter.status === 'break'}
-                className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
-                  activeCounter.status === 'break'
-                    ? 'bg-white text-amber-700 shadow-xs'
-                    : 'text-gray-600 hover:text-gray-900'
-                }`}
-              >
-                ☕ Break
-              </button>
-              <button
-                type="button"
-                onClick={() => handleStatusChange('closed')}
-                disabled={actionPending || activeCounter.status === 'closed'}
-                className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
-                  activeCounter.status === 'closed'
-                    ? 'bg-white text-gray-700 shadow-xs'
-                    : 'text-gray-600 hover:text-gray-900'
-                }`}
-              >
-                ⚪ Closed
-              </button>
+            <div
+              className="inline-flex rounded-xl bg-gray-100 p-1 border border-gray-200 gap-1 shadow-inner"
+              role="radiogroup"
+              aria-label="Counter status"
+            >
+              {[
+                {
+                  status: 'available',
+                  label: 'Ready',
+                  icon: '🟢',
+                  activeCls: 'bg-white text-emerald-700 shadow-sm border border-emerald-300 ring-2 ring-emerald-500/20',
+                },
+                {
+                  status: 'busy',
+                  label: 'Busy',
+                  icon: '🔵',
+                  activeCls: 'bg-white text-blue-700 shadow-sm border border-blue-300 ring-2 ring-blue-500/20',
+                },
+                {
+                  status: 'break',
+                  label: 'Break',
+                  icon: '☕',
+                  activeCls: 'bg-white text-amber-700 shadow-sm border border-amber-300 ring-2 ring-amber-500/20',
+                },
+                {
+                  status: 'closed',
+                  label: 'Closed',
+                  icon: '⚪',
+                  activeCls: 'bg-white text-gray-700 shadow-sm border border-gray-300 ring-2 ring-gray-400/20',
+                },
+              ].map(({ status, label, icon, activeCls }) => {
+                const isSelected = activeCounter.status === status
+
+                return (
+                  <button
+                    key={status}
+                    type="button"
+                    role="radio"
+                    aria-checked={isSelected}
+                    onClick={() => handleStatusChange(status as any)}
+                    className={`relative flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all duration-150 cursor-pointer select-none active:scale-95 ${
+                      isSelected
+                        ? activeCls
+                        : 'text-gray-600 hover:text-gray-900 hover:bg-white/70'
+                    }`}
+                  >
+                    <span>{icon}</span>
+                    <span>{label}</span>
+                    {isSelected && (
+                      <Check className="w-3.5 h-3.5 stroke-[2.5] text-current ml-0.5 animate-in zoom-in-50 duration-150" />
+                    )}
+                  </button>
+                )
+              })}
             </div>
           </div>
         )}
