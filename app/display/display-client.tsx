@@ -60,15 +60,12 @@ export default function DisplayClient({ initialCounters, initialNextUp }: Props)
     prevTokensRef.current = map
   }, [initialCounters])
 
-  // ── Auto-refresh on mount if server-side fetch failed (empty initial data) ──
-  // This handles the "page could not load" scenario where the server component
-  // errored and fell back to empty arrays — client fetches fresh data itself.
+  // ── Fetch data on mount (page always starts with empty initial data) ─────
+  // page.tsx is now a pure client-side page that passes empty arrays.
+  // We fetch fresh data here immediately after mount.
   useEffect(() => {
-    if (initialCounters.length === 0) {
-      // Small delay to ensure the component is fully mounted and Supabase client is ready
-      const t = setTimeout(() => refreshBoard(), 300)
-      return () => clearTimeout(t)
-    }
+    const t = setTimeout(() => refreshBoard(), 200)
+    return () => clearTimeout(t)
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
