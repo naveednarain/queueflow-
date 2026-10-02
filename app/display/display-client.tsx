@@ -20,7 +20,6 @@ import {
   Moon,
 } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
-import { getDisplayData } from '@/lib/actions/staff'
 import type { DisplayCounterItem } from '@/lib/types'
 import BackButton from '@/components/back-button'
 
@@ -60,7 +59,7 @@ export default function DisplayClient({ initialCounters, initialNextUp }: Props)
     prevTokensRef.current = map
   }, [initialCounters])
 
-  const hasLoadedOnceRef = useRef(false)
+  const [initialLoading, setInitialLoading] = useState(initialCounters.length === 0)
 
   // ── Web Audio Chime (Airport-style 2-tone melodic chime - Singleton Context) ──
   const playAirportChime = useCallback(() => {
@@ -151,12 +150,80 @@ export default function DisplayClient({ initialCounters, initialNextUp }: Props)
     setIsRefreshing(true)
 
     try {
-      const data = await getDisplayData()
-      setCounters(data.counters)
-      setNextUp(data.nextUp)
+      const supabase = createClient()
+
+      // 1. Fetch all counters with department name
+      const { data: countersData, error: cErr } = await supabase
+        .from('counters')
+        .select(`
+          id,
+          name,
+          status,
+          current_token,
+          departments(name)
+        `)
+        .order('name')
+
+      if (cErr) throw cErr
+
+      const tokenIds = (countersData ?? [])
+        .map((c: any) => c.current_token)
+        .filter(Boolean)
+
+      const tokenMap: Record<string, { token_number: string; status: any; service_name: string; called_at: string }> = {}
+
+      if (tokenIds.length > 0) {
+        const { data: tokensData } = await supabase
+          .from('tokens')
+          .select('id, token_number, status, called_at, services(name)')
+          .in('id', tokenIds)
+
+        if (tokensData) {
+          for (const t of tokensData as any[]) {
+            tokenMap[t.id] = {
+              token_number: t.token_number,
+              status: t.status,
+              service_name: t.services?.name ?? '',
+              called_at: t.called_at,
+            }
+          }
+        }
+      }
+
+      const formattedCounters: DisplayCounterItem[] = (countersData ?? []).map((c: any) => ({
+        counter_id: c.id,
+        counter_name: c.name,
+        department_name: c.departments?.name ?? '',
+        status: c.status,
+        token_number: c.current_token && tokenMap[c.current_token] ? tokenMap[c.current_token].token_number : null,
+        token_status: c.current_token && tokenMap[c.current_token] ? tokenMap[c.current_token].status : null,
+        service_name: c.current_token && tokenMap[c.current_token] ? tokenMap[c.current_token].service_name : null,
+        called_at: c.current_token && tokenMap[c.current_token] ? tokenMap[c.current_token].called_at : null,
+      }))
+
+      // 2. Fetch next up waiting tokens
+      const { data: nextTokens } = await supabase
+        .from('tokens')
+        .select(`
+          token_number,
+          created_at,
+          services(name, departments(name))
+        `)
+        .in('status', ['waiting', 'recalled'])
+        .order('created_at', { ascending: true })
+        .limit(8)
+
+      const formattedNextUp = (nextTokens ?? []).map((t: any) => ({
+        token_number: t.token_number,
+        service_name: t.services?.name ?? '',
+        department_name: t.services?.departments?.name ?? '',
+      }))
+
+      setCounters(formattedCounters)
+      setNextUp(formattedNextUp)
 
       // Detect newly called tokens to play chime and flash
-      for (const c of data.counters) {
+      for (const c of formattedCounters) {
         const prevToken = prevTokensRef.current[c.counter_id]
         if (
           c.token_number &&
@@ -176,15 +243,14 @@ export default function DisplayClient({ initialCounters, initialNextUp }: Props)
       console.error('Display refresh failed:', err)
     } finally {
       isFetchingRef.current = false
+      setInitialLoading(false)
       setTimeout(() => setIsRefreshing(false), 300)
     }
   }, [playAirportChime, speakTokenAnnouncement])
 
   // Fetch data immediately on mount
   useEffect(() => {
-    refreshBoard().finally(() => {
-      hasLoadedOnceRef.current = true
-    })
+    refreshBoard()
   }, [refreshBoard])
 
   // ── Debounced Trigger for Realtime Events ──────────────────────
@@ -453,7 +519,7 @@ export default function DisplayClient({ initialCounters, initialNextUp }: Props)
       {/* ── Main Counters Live Display ─────────────────────────────── */}
       <main className="flex-1 p-3 sm:p-6 md:p-8 lg:p-10 max-w-[1920px] mx-auto w-full flex flex-col justify-start">
         {counters.length === 0 ? (
-          !hasLoadedOnceRef.current ? (
+          initialLoading ? (
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3 sm:gap-6 auto-rows-fr">
               {[1, 2, 3, 4].map((i) => (
                 <div

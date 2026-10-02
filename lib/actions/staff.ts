@@ -8,8 +8,6 @@ import { z } from 'zod'
 export async function getCounters(): Promise<StaffCounter[]> {
   const supabase = await createClient()
 
-  // Single query: counters + their current token details joined in one round-trip
-  // Uses Supabase's nested select to eliminate the previous N+1 pattern
   const { data: counters, error } = await supabase
     .from('counters')
     .select(`
@@ -21,8 +19,25 @@ export async function getCounters(): Promise<StaffCounter[]> {
       status,
       current_token,
       departments(name),
-      services(name),
-      tokens!counters_current_token_fkey(
+      services(name)
+    `)
+    .order('name')
+
+  if (error || !counters) {
+    if (error) console.error('Error fetching counters in getCounters:', error)
+    return []
+  }
+
+  // Fetch token details for active tokens in one single batch query
+  const tokenIds = counters
+    .map((c) => c.current_token)
+    .filter((id): id is string => Boolean(id))
+
+  const tokenMap: Record<string, any> = {}
+  if (tokenIds.length > 0) {
+    const { data: tokens } = await supabase
+      .from('tokens')
+      .select(`
         id,
         token_number,
         status,
@@ -31,38 +46,39 @@ export async function getCounters(): Promise<StaffCounter[]> {
         profiles(name, email),
         services(name),
         appointments(ref_no)
-      )
-    `)
-    .order('name')
+      `)
+      .in('id', tokenIds)
 
-  if (error || !counters) return []
-
-  return (counters as any[]).map((c) => {
-    const t = c.tokens ?? null
-    return {
-      id: c.id,
-      department_id: c.department_id,
-      name: c.name,
-      service_id: c.service_id,
-      assigned_staff: c.assigned_staff,
-      status: c.status,
-      current_token: c.current_token,
-      department_name: c.departments?.name ?? 'Unknown',
-      service_name: c.services?.name ?? null,
-      current_token_details: t
-        ? {
-            id: t.id,
-            token_number: t.token_number,
-            status: t.status,
-            called_at: t.called_at,
-            started_at: t.started_at,
-            user_name: t.profiles?.name ?? t.profiles?.email ?? 'Walk-in Customer',
-            service_name: t.services?.name ?? null,
-            appointment_ref: t.appointments?.ref_no ?? null,
-          }
-        : null,
+    if (tokens) {
+      for (const t of tokens as any[]) {
+        tokenMap[t.id] = {
+          id: t.id,
+          token_number: t.token_number,
+          status: t.status,
+          called_at: t.called_at,
+          started_at: t.started_at,
+          user_name: t.profiles?.name ?? t.profiles?.email ?? 'Walk-in Customer',
+          service_name: t.services?.name ?? null,
+          appointment_ref: t.appointments?.ref_no ?? null,
+        }
+      }
     }
-  })
+  }
+
+  return counters.map((c: any) => ({
+    id: c.id,
+    department_id: c.department_id,
+    name: c.name,
+    service_id: c.service_id,
+    assigned_staff: c.assigned_staff,
+    status: c.status,
+    current_token: c.current_token,
+    department_name: c.departments?.name ?? 'Unknown',
+    service_name: c.services?.name ?? null,
+    current_token_details: c.current_token && tokenMap[c.current_token]
+      ? tokenMap[c.current_token]
+      : null,
+  }))
 }
 
 export async function getCounterDetails(counterId: string): Promise<StaffCounter | null> {
