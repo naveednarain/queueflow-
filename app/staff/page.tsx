@@ -25,10 +25,11 @@ export default async function StaffPage() {
     redirect('/login?message=You need staff access to view that page.')
   }
 
-  // Lazily update any past appointments that missed check-in window
-  await markMissedAppointments().catch(() => {})
-
-  const counters = await getCounters()
+  // Parallel: mark missed appointments + fetch counters
+  const [counters] = await Promise.all([
+    getCounters(),
+    markMissedAppointments().catch(() => {}),
+  ])
 
   return (
     <div className="min-h-screen bg-gray-50/50 flex flex-col">

@@ -15,13 +15,11 @@ export default async function TokenPage() {
 
   if (!user) redirect('/login?message=Please sign in to get a token.')
 
-  const { data: profile } = await supabase
-    .from('profiles')
-    .select('*')
-    .eq('id', user.id)
-    .single<Profile>()
-
-  const departments = await getServicesGrouped()
+  // Parallel fetch: profile + services in one round-trip
+  const [{ data: profile }, departments] = await Promise.all([
+    supabase.from('profiles').select('*').eq('id', user.id).single<Profile>(),
+    getServicesGrouped(),
+  ])
 
   return (
     <div className="min-h-screen flex flex-col">
