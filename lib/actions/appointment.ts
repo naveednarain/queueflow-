@@ -203,7 +203,7 @@ export async function getUserAppointments(
       .eq('user_id', parsed.data)
       .order('appointment_date', { ascending: false })
       .order('start_time', { ascending: false }),
-    supabase.rpc('mark_missed_appointments').catch(() => {}),
+    Promise.resolve(supabase.rpc('mark_missed_appointments')).catch(() => {}),
   ])
 
   if (error || !data) return []

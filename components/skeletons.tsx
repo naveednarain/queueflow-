@@ -1,10 +1,17 @@
 import React from 'react'
 
-/** Animated shimmer skeleton block */
-export function Skeleton({ className = '' }: { className?: string }) {
+/** Animated shimmer skeleton block with optional inline styles */
+export function Skeleton({
+  className = '',
+  style,
+}: {
+  className?: string
+  style?: React.CSSProperties
+}) {
   return (
     <div
       className={`animate-pulse rounded-lg bg-gray-200 ${className}`}
+      style={style}
     />
   )
 }
@@ -20,7 +27,7 @@ export function NavbarSkeleton() {
         </div>
         <div className="hidden md:flex items-center gap-2">
           {[80, 100, 72, 96, 88].map((w, i) => (
-            <Skeleton key={i} className={`h-8 rounded-lg`} style={{ width: w }} />
+            <Skeleton key={i} className="h-8 rounded-lg" style={{ width: w }} />
           ))}
         </div>
         <Skeleton className="w-20 h-8 rounded-lg" />
@@ -163,6 +170,68 @@ export function MyQueueSkeleton() {
       </div>
       {/* Appointments list */}
       <TableSkeleton rows={3} />
+    </div>
+  )
+}
+
+/** Complete Manager Dashboard Page Skeleton */
+export function ManagerPageSkeleton() {
+  return (
+    <div className="space-y-8 animate-fade-in">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div className="space-y-2">
+          <Skeleton className="w-48 h-8" />
+          <Skeleton className="w-64 h-4" />
+        </div>
+        <div className="flex gap-2">
+          <Skeleton className="w-28 h-9 rounded-lg" />
+          <Skeleton className="w-28 h-9 rounded-lg" />
+        </div>
+      </div>
+      <CardGridSkeleton count={4} />
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <ChartSkeleton />
+        <ChartSkeleton />
+      </div>
+      <TableSkeleton rows={4} />
+    </div>
+  )
+}
+
+/** Complete Admin Panel Page Skeleton */
+export function AdminPageSkeleton() {
+  return (
+    <div className="space-y-8 animate-fade-in">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div className="space-y-2">
+          <Skeleton className="w-48 h-8" />
+          <Skeleton className="w-72 h-4" />
+        </div>
+        <Skeleton className="w-36 h-9 rounded-lg" />
+      </div>
+      <div className="flex gap-2 border-b border-gray-200 pb-2">
+        {[90, 80, 80, 80, 60].map((w, i) => (
+          <Skeleton key={i} className="h-8 rounded-lg" style={{ width: w }} />
+        ))}
+      </div>
+      <CardGridSkeleton count={4} />
+      <TableSkeleton rows={6} />
+    </div>
+  )
+}
+
+/** Complete Staff Counter Page Skeleton */
+export function StaffPageSkeleton() {
+  return (
+    <div className="space-y-8 animate-fade-in">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div className="space-y-2">
+          <Skeleton className="w-48 h-8" />
+          <Skeleton className="w-64 h-4" />
+        </div>
+        <Skeleton className="w-32 h-9 rounded-lg" />
+      </div>
+      <CounterCardSkeleton count={3} />
     </div>
   )
 }

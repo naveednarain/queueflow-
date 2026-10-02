@@ -2,7 +2,7 @@
 
 import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { toast } from 'sonner'
 import {
   LayoutDashboard,
@@ -16,8 +16,8 @@ import {
   LogOut,
   Menu,
   X,
-  Bell,
   ArrowLeft,
+  Loader2,
 } from 'lucide-react'
 import type { Profile } from '@/lib/types'
 import { logout } from '@/lib/actions/auth'
@@ -91,6 +91,13 @@ export default function Navbar({ profile }: NavbarProps) {
   const router = useRouter()
   const [mobileOpen, setMobileOpen] = useState(false)
   const [loggingOut, setLoggingOut] = useState(false)
+  const [pendingHref, setPendingHref] = useState<string | null>(null)
+
+  // Clear pending state whenever pathname changes
+  useEffect(() => {
+    setPendingHref(null)
+    setMobileOpen(false)
+  }, [pathname])
 
   const role = profile?.role ?? 'customer'
   const visibleLinks = profile
@@ -147,7 +154,13 @@ export default function Navbar({ profile }: NavbarProps) {
                 <ArrowLeft className="w-4 h-4 stroke-[2.5]" />
               </button>
             )}
-            <Link href="/" className="flex items-center gap-2 font-bold text-lg">
+            <Link
+              href="/"
+              onClick={() => {
+                if (pathname !== '/') setPendingHref('/')
+              }}
+              className="flex items-center gap-2 font-bold text-lg"
+            >
               <div className="w-8 h-8 rounded-lg bg-[#22C55E] flex items-center justify-center">
                 <Ticket className="w-4 h-4 text-white" />
               </div>
@@ -162,19 +175,35 @@ export default function Navbar({ profile }: NavbarProps) {
                 link.href === '/'
                   ? pathname === '/'
                   : pathname.startsWith(link.href)
+              const isPending = pendingHref === link.href
+
               return (
                 <Link
                   key={link.href}
                   href={link.href}
                   prefetch={true}
-                  className={`flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium transition-all active:scale-95 active:opacity-70 ${
-                    active
+                  onClick={() => {
+                    if (pathname !== link.href) {
+                      setPendingHref(link.href)
+                    }
+                  }}
+                  className={`flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium transition-all active:scale-95 ${
+                    isPending
+                      ? 'bg-[#22C55E]/15 text-[#22C55E] ring-1 ring-[#22C55E]/30 animate-pulse'
+                      : active
                       ? 'bg-[#22C55E]/10 text-[#22C55E]'
                       : 'text-gray-600 hover:bg-gray-100 hover:text-gray-900'
                   }`}
                 >
-                  {link.icon}
+                  {isPending ? (
+                    <Loader2 className="w-4 h-4 animate-spin text-[#22C55E]" />
+                  ) : (
+                    link.icon
+                  )}
                   {link.label}
+                  {isPending && (
+                    <span className="w-1.5 h-1.5 rounded-full bg-[#22C55E] animate-ping" />
+                  )}
                 </Link>
               )
             })}
@@ -217,12 +246,18 @@ export default function Navbar({ profile }: NavbarProps) {
               <div className="flex items-center gap-2">
                 <Link
                   href="/login"
+                  onClick={() => {
+                    if (pathname !== '/login') setPendingHref('/login')
+                  }}
                   className="px-3 py-2 rounded-lg text-sm font-medium text-gray-600 hover:bg-gray-100 transition-colors"
                 >
                   Sign in
                 </Link>
                 <Link
                   href="/register"
+                  onClick={() => {
+                    if (pathname !== '/register') setPendingHref('/register')
+                  }}
                   className="px-3 py-2 rounded-lg text-sm font-medium bg-[#22C55E] text-white hover:bg-[#16A34A] transition-colors"
                 >
                   Register
@@ -277,20 +312,38 @@ export default function Navbar({ profile }: NavbarProps) {
                 link.href === '/'
                   ? pathname === '/'
                   : pathname.startsWith(link.href)
+              const isPending = pendingHref === link.href
+
               return (
                 <Link
                   key={link.href}
                   href={link.href}
                   prefetch={true}
-                  onClick={() => setMobileOpen(false)}
-                  className={`flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-all active:scale-95 active:opacity-70 ${
-                    active
+                  onClick={() => {
+                    if (pathname !== link.href) {
+                      setPendingHref(link.href)
+                    }
+                    setMobileOpen(false)
+                  }}
+                  className={`flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-all active:scale-95 ${
+                    isPending
+                      ? 'bg-[#22C55E]/15 text-[#22C55E] ring-1 ring-[#22C55E]/30 animate-pulse'
+                      : active
                       ? 'bg-[#22C55E]/10 text-[#22C55E]'
                       : 'text-gray-600 hover:bg-gray-100 hover:text-gray-900'
                   }`}
                 >
-                  {link.icon}
+                  {isPending ? (
+                    <Loader2 className="w-4 h-4 animate-spin text-[#22C55E]" />
+                  ) : (
+                    link.icon
+                  )}
                   {link.label}
+                  {isPending && (
+                    <span className="ml-auto text-xs text-[#22C55E] font-normal animate-pulse">
+                      Loading...
+                    </span>
+                  )}
                 </Link>
               )
             })}
