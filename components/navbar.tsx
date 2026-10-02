@@ -166,7 +166,8 @@ export default function Navbar({ profile }: NavbarProps) {
                 <Link
                   key={link.href}
                   href={link.href}
-                  className={`flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
+                  prefetch={true}
+                  className={`flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium transition-all active:scale-95 active:opacity-70 ${
                     active
                       ? 'bg-[#22C55E]/10 text-[#22C55E]'
                       : 'text-gray-600 hover:bg-gray-100 hover:text-gray-900'
@@ -280,8 +281,9 @@ export default function Navbar({ profile }: NavbarProps) {
                 <Link
                   key={link.href}
                   href={link.href}
+                  prefetch={true}
                   onClick={() => setMobileOpen(false)}
-                  className={`flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
+                  className={`flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-all active:scale-95 active:opacity-70 ${
                     active
                       ? 'bg-[#22C55E]/10 text-[#22C55E]'
                       : 'text-gray-600 hover:bg-gray-100 hover:text-gray-900'
