@@ -181,7 +181,7 @@ export default function Navbar({ profile }: NavbarProps) {
                 <Link
                   key={link.href}
                   href={link.href}
-                  prefetch={true}
+                  prefetch={link.href === '/my' ? false : undefined}
                   onClick={() => {
                     if (pathname !== link.href) {
                       setPendingHref(link.href)
@@ -318,7 +318,7 @@ export default function Navbar({ profile }: NavbarProps) {
                 <Link
                   key={link.href}
                   href={link.href}
-                  prefetch={true}
+                  prefetch={link.href === '/my' ? false : undefined}
                   onClick={() => {
                     if (pathname !== link.href) {
                       setPendingHref(link.href)

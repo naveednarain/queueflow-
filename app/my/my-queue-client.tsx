@@ -70,12 +70,58 @@ export default function MyQueueClient({
   initialNotifications,
 }: Props) {
   const [activeToken, setActiveToken] = useState<Token | null>(initialToken)
+  const [checkingToken, setCheckingToken] = useState<boolean>(!initialToken)
   const [appointments, setAppointments] = useState<AppointmentWithDetails[]>(initialAppointments)
   const [notifications, setNotifications] = useState<Notification[]>(initialNotifications)
   const [showNotifications, setShowNotifications] = useState(false)
   const [activeTab, setActiveTab] = useState<'queue' | 'appointments' | 'history'>('queue')
   const [actionPending, setActionPending] = useState(false)
   const [rescheduleModalAppt, setRescheduleModalAppt] = useState<AppointmentWithDetails | null>(null)
+
+  // Keep activeToken in sync if server provides fresh initialToken
+  useEffect(() => {
+    if (initialToken) {
+      setActiveToken(initialToken)
+      setCheckingToken(false)
+    }
+  }, [initialToken])
+
+  // Immediate client-side verification on mount if no initial token
+  useEffect(() => {
+    let isMounted = true
+    const checkImmediate = async () => {
+      try {
+        const supabase = createClient()
+        const { data } = await supabase
+          .from('tokens')
+          .select('*')
+          .eq('user_id', userId)
+          .in('status', ['waiting', 'called', 'recalled', 'in_service'])
+          .order('created_at', { ascending: false })
+          .limit(1)
+          .maybeSingle()
+
+        if (isMounted) {
+          if (data) {
+            setActiveToken(data as Token)
+          }
+          setCheckingToken(false)
+        }
+      } catch {
+        if (isMounted) setCheckingToken(false)
+      }
+    }
+
+    if (!initialToken) {
+      checkImmediate()
+    } else {
+      setCheckingToken(false)
+    }
+
+    return () => {
+      isMounted = false
+    }
+  }, [userId, initialToken])
 
   const channelRef = useRef<ReturnType<ReturnType<typeof createClient>['channel']> | null>(null)
   const unreadCount = notifications.filter((n) => !n.read).length
@@ -174,7 +220,7 @@ export default function MyQueueClient({
     }
   }, [subscribeRealtime])
 
-  // ── Polling Fallback ──────────────────────────────────────────
+  // ── Polling Fallback (Fast 3s interval) ───────────────────────
   useEffect(() => {
     const supabase = createClient()
     const poll = setInterval(async () => {
@@ -191,7 +237,8 @@ export default function MyQueueClient({
         if (!data) return prev?.status && ['waiting', 'called', 'recalled', 'in_service'].includes(prev.status) ? null : prev
         return data as Token
       })
-    }, 6000)
+      setCheckingToken(false)
+    }, 3000)
     return () => clearInterval(poll)
   }, [userId])
 
@@ -461,7 +508,22 @@ export default function MyQueueClient({
       {/* ── TAB 1: Live Queue ──────────────────────────────────────── */}
       {activeTab === 'queue' && (
         <div className="space-y-4">
-          {activeToken ? (
+          {checkingToken ? (
+            <div className="bg-white rounded-3xl border border-gray-100 shadow-sm p-6 space-y-4 animate-pulse">
+              <div className="flex items-center justify-between">
+                <div className="h-5 w-36 bg-gray-200 rounded-lg" />
+                <div className="h-5 w-28 bg-gray-200 rounded-full" />
+              </div>
+              <div className="py-6 text-center space-y-3">
+                <div className="h-16 w-36 bg-gray-200 rounded-2xl mx-auto" />
+                <div className="h-4 w-48 bg-gray-200 rounded mx-auto" />
+              </div>
+              <div className="grid grid-cols-2 gap-4 pt-2">
+                <div className="h-20 bg-gray-100 rounded-2xl" />
+                <div className="h-20 bg-gray-100 rounded-2xl" />
+              </div>
+            </div>
+          ) : activeToken ? (
             <ActiveTokenCard token={activeToken} />
           ) : (
             <div className="bg-white rounded-3xl border border-gray-100 shadow-sm p-8 text-center">

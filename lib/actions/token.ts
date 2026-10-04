@@ -1,6 +1,7 @@
 'use server'
 
 import { createClient } from '@/lib/supabase/server'
+import { revalidatePath } from 'next/cache'
 import type { Token, DepartmentWithService, DepartmentGroup } from '@/lib/types'
 import { z } from 'zod'
 import { recordActivityLog } from '@/lib/actions/admin'
@@ -105,6 +106,10 @@ export async function createToken(
   if (token) {
     await recordActivityLog('create_token_' + token.token_number, 'tokens', token.id)
   }
+  revalidatePath('/my')
+  revalidatePath('/token')
+  revalidatePath('/staff')
+  revalidatePath('/display')
   return { data: token ?? null, error: null }
 }
 
@@ -123,7 +128,7 @@ export async function getActiveToken(
     .in('status', ['waiting', 'called', 'recalled', 'in_service'])
     .order('created_at', { ascending: false })
     .limit(1)
-    .single()
+    .maybeSingle()
 
   return data as Token | null
 }
@@ -138,11 +143,80 @@ export async function getTokenHistory(userId: string): Promise<Token[]> {
     .from('tokens')
     .select('*, services(name, prefix), counters(name)')
     .eq('user_id', parsed.data)
-    .in('status', ['completed', 'skipped', 'missed', 'called'])
+    .in('status', ['completed', 'skipped', 'missed'])
     .order('created_at', { ascending: false })
     .limit(20)
 
   return (data ?? []) as any[]
+}
+
+/**
+ * Fast consolidated queue data loader for /my page.
+ * Executes all user queries in a single round-trip using one Supabase client.
+ */
+export async function getMyQueueData(userId: string) {
+  const parsed = uuidSchema.safeParse(userId)
+  if (!parsed.success) {
+    return {
+      activeToken: null,
+      appointments: [],
+      history: [],
+      notifications: [],
+    }
+  }
+
+  const supabase = await createClient()
+
+  const [activeTokenRes, appointmentsRes, historyRes, notificationsRes] = await Promise.all([
+    supabase
+      .from('tokens')
+      .select('*')
+      .eq('user_id', parsed.data)
+      .in('status', ['waiting', 'called', 'recalled', 'in_service'])
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle(),
+    supabase
+      .from('appointments')
+      .select(`
+        *,
+        services(
+          id,
+          name,
+          prefix,
+          avg_duration,
+          departments(id, name)
+        ),
+        tokens(
+          id,
+          token_number,
+          status
+        )
+      `)
+      .eq('user_id', parsed.data)
+      .order('appointment_date', { ascending: false })
+      .order('start_time', { ascending: false }),
+    supabase
+      .from('tokens')
+      .select('*, services(name, prefix), counters(name)')
+      .eq('user_id', parsed.data)
+      .in('status', ['completed', 'skipped', 'missed'])
+      .order('created_at', { ascending: false })
+      .limit(20),
+    supabase
+      .from('notifications')
+      .select('*')
+      .eq('user_id', parsed.data)
+      .order('created_at', { ascending: false })
+      .limit(30),
+  ])
+
+  return {
+    activeToken: (activeTokenRes.data as Token) ?? null,
+    appointments: (appointmentsRes.data as any[]) ?? [],
+    history: (historyRes.data ?? []) as any[],
+    notifications: (notificationsRes.data ?? []) as any[],
+  }
 }
 
 export async function getUserNotifications(userId: string) {

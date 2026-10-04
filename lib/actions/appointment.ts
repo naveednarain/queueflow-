@@ -221,30 +221,26 @@ export async function getUserAppointments(
 
   const supabase = await createClient()
 
-  // Run maintenance + actual query in parallel (non-blocking)
-  const [{ data, error }] = await Promise.all([
-    supabase
-      .from('appointments')
-      .select(`
-        *,
-        services(
-          id,
-          name,
-          prefix,
-          avg_duration,
-          departments(id, name)
-        ),
-        tokens(
-          id,
-          token_number,
-          status
-        )
-      `)
-      .eq('user_id', parsed.data)
-      .order('appointment_date', { ascending: false })
-      .order('start_time', { ascending: false }),
-    Promise.resolve(supabase.rpc('mark_missed_appointments')).catch(() => {}),
-  ])
+  const { data, error } = await supabase
+    .from('appointments')
+    .select(`
+      *,
+      services(
+        id,
+        name,
+        prefix,
+        avg_duration,
+        departments(id, name)
+      ),
+      tokens(
+        id,
+        token_number,
+        status
+      )
+    `)
+    .eq('user_id', parsed.data)
+    .order('appointment_date', { ascending: false })
+    .order('start_time', { ascending: false })
 
   if (error || !data) return []
 

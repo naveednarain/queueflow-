@@ -1,12 +1,12 @@
-import { Suspense } from 'react'
 import { createClient } from '@/lib/supabase/server'
 import Navbar from '@/components/navbar'
 import type { Profile } from '@/lib/types'
 import { redirect } from 'next/navigation'
-import { getActiveToken, getTokenHistory, getUserNotifications } from '@/lib/actions/token'
-import { getUserAppointments } from '@/lib/actions/appointment'
+import { getMyQueueData } from '@/lib/actions/token'
 import MyQueueClient from './my-queue-client'
-import { MyQueueSkeleton } from '@/components/skeletons'
+
+export const dynamic = 'force-dynamic'
+export const revalidate = 0
 
 export default async function MyPage() {
   const supabase = await createClient()
@@ -16,39 +16,28 @@ export default async function MyPage() {
 
   if (!user) redirect('/login?message=Please sign in to view your queue status.')
 
-  const { data: profile } = await supabase
-    .from('profiles')
-    .select('id, name, email, role, account_status, phone')
-    .eq('id', user.id)
-    .single<Profile>()
-
-  return (
-    <div className="min-h-screen bg-gray-50/50 flex flex-col">
-      <Navbar profile={profile} />
-      <main className="flex-1 max-w-3xl mx-auto w-full px-4 sm:px-6 py-8 md:py-10">
-        <Suspense fallback={<MyQueueSkeleton />}>
-          <MyQueueDataLoader userId={user.id} />
-        </Suspense>
-      </main>
-    </div>
-  )
-}
-
-async function MyQueueDataLoader({ userId }: { userId: string }) {
-  const [activeToken, appointments, history, notifications] = await Promise.all([
-    getActiveToken(userId),
-    getUserAppointments(userId),
-    getTokenHistory(userId),
-    getUserNotifications(userId),
+  // Fetch profile and complete queue data in parallel
+  const [profileRes, queueData] = await Promise.all([
+    supabase
+      .from('profiles')
+      .select('id, name, email, role, account_status, phone')
+      .eq('id', user.id)
+      .single<Profile>(),
+    getMyQueueData(user.id),
   ])
 
   return (
-    <MyQueueClient
-      userId={userId}
-      initialToken={activeToken}
-      initialAppointments={appointments}
-      initialHistory={history as any}
-      initialNotifications={notifications as any}
-    />
+    <div className="min-h-screen bg-gray-50/50 flex flex-col">
+      <Navbar profile={profileRes.data} />
+      <main className="flex-1 max-w-3xl mx-auto w-full px-4 sm:px-6 py-8 md:py-10">
+        <MyQueueClient
+          userId={user.id}
+          initialToken={queueData.activeToken}
+          initialAppointments={queueData.appointments}
+          initialHistory={queueData.history as any}
+          initialNotifications={queueData.notifications as any}
+        />
+      </main>
+    </div>
   )
 }

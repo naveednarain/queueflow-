@@ -341,6 +341,7 @@ function TokenResultCard({
           <Link
             href="/my"
             id="view-my-queue-btn"
+            prefetch={false}
             className="flex-1 flex items-center justify-center gap-2 bg-[#22C55E] text-white font-semibold py-2.5 px-4 rounded-xl hover:bg-[#16A34A] transition-colors"
           >
             Track Live Position
