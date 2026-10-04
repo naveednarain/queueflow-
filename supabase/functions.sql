@@ -210,6 +210,7 @@ declare
   v_next_num     int;
   v_token_num    text;
   v_token_id     uuid;
+  v_today        date := current_date;
 begin
   -- Must be authenticated
   if v_uid is null then
@@ -256,15 +257,14 @@ begin
   into v_next_num
   from tokens
   where service_id = p_service
-    and created_at >= current_date::timestamptz
-    and created_at <  (current_date + 1)::timestamptz
+    and token_date = v_today
     and token_number ~ ('^' || v_service.prefix || '-[0-9]+$');
 
   v_token_num := v_service.prefix || '-' || lpad(v_next_num::text, 3, '0');
 
-  -- Insert the token
-  insert into tokens (token_number, user_id, service_id, status)
-  values (v_token_num, v_uid, p_service, 'waiting')
+  -- Insert the token (daily unique index is the last-line-of-defense guard)
+  insert into tokens (token_number, user_id, service_id, status, token_date)
+  values (v_token_num, v_uid, p_service, 'waiting', v_today)
   returning id into v_token_id;
 
   -- Recalculate queue

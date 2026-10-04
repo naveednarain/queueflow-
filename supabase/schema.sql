@@ -64,6 +64,7 @@ create table appointments (
 create table tokens (
   id uuid primary key default gen_random_uuid(),
   token_number text not null,                -- A-027
+  token_date date default current_date,      -- calendar day token was issued (for daily uniqueness)
   user_id uuid references profiles,
   service_id uuid not null references services,
   appointment_id uuid references appointments,  -- null = walk-in
@@ -75,10 +76,12 @@ create table tokens (
   created_at timestamptz default now(),
   called_at timestamptz,
   started_at timestamptz,
-  completed_at timestamptz,
-  -- Guarantee uniqueness: no two tokens can share the same number within the same service
-  unique (service_id, token_number)
+  completed_at timestamptz
 );
+
+-- Token numbers reset each day: unique only within (service, date)
+create unique index tokens_service_token_number_day_unique
+  on tokens (service_id, token_number, token_date);
 
 create table notifications (
   id uuid primary key default gen_random_uuid(),
