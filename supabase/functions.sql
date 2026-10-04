@@ -174,11 +174,13 @@ begin
          estimated_wait = ceil(o.pos::numeric * v_avg / greatest(v_active, 1))::int
     from ordered o where t.id = o.id;
 
-  -- Notify waiting users who just reached position <= 2 (if not already notified)
+  -- Notify waiting users who just reached position <= 2 (if not already notified).
+  -- Duplicate-check uses token ID (stored in message) NOT token_number text, to
+  -- prevent cross-user bleed when two users share the same token_number string.
   insert into notifications (user_id, message, type)
   select
     t.user_id,
-    'Your token ' || t.token_number || ' is almost up! You are position #' || t.queue_position || ' in queue.',
+    'Your token ' || t.token_number || ' is almost up! You are position #' || t.queue_position || ' in queue. [tid:' || t.id || ']',
     'queue_close'
   from tokens t
   where t.service_id = p_service
@@ -190,7 +192,7 @@ begin
       select 1 from notifications n
       where n.user_id = t.user_id
         and n.type = 'queue_close'
-        and n.message like '%' || t.token_number || '%'
+        and n.message like '%[tid:' || t.id || ']%'
     );
 end $$;
 
@@ -201,21 +203,21 @@ create or replace function create_token(p_service uuid)
 returns setof tokens
 language plpgsql security definer set search_path = public as $$
 declare
-  v_uid         uuid := auth.uid();
-  v_rule        rules%rowtype;
-  v_service     services%rowtype;
+  v_uid          uuid := auth.uid();
+  v_rule         rules%rowtype;
+  v_service      services%rowtype;
   v_active_count int;
-  v_next_num    int;
-  v_token_num   text;
-  v_token_id    uuid;
+  v_next_num     int;
+  v_token_num    text;
+  v_token_id     uuid;
 begin
   -- Must be authenticated
   if v_uid is null then
     raise exception 'Not authenticated';
   end if;
 
-  -- Advisory lock to prevent race conditions
-  perform pg_advisory_xact_lock(hashtext(p_service::text));
+  -- Advisory lock per-service to prevent race conditions (int8 overload required)
+  perform pg_advisory_xact_lock(hashtext(p_service::text)::int8);
 
   -- Load service
   select * into v_service from services where id = p_service and active = true;
@@ -244,12 +246,19 @@ begin
     raise exception 'You have reached the maximum number of active tokens';
   end if;
 
-  -- Next token number = count of today's tokens for this service + 1
-  select count(*) + 1 into v_next_num
-    from tokens
-    where service_id = p_service
-      and created_at >= current_date::timestamptz
-      and created_at < (current_date + 1)::timestamptz;
+  -- Use MAX of the numeric suffix for today's tokens (not COUNT) to handle any gaps.
+  -- This guarantees we never re-use a number even if a previous token was deleted.
+  select coalesce(
+    max(
+      (regexp_replace(token_number, '^[^-]+-', ''))::int
+    ), 0
+  ) + 1
+  into v_next_num
+  from tokens
+  where service_id = p_service
+    and created_at >= current_date::timestamptz
+    and created_at <  (current_date + 1)::timestamptz
+    and token_number ~ ('^' || v_service.prefix || '-[0-9]+$');
 
   v_token_num := v_service.prefix || '-' || lpad(v_next_num::text, 3, '0');
 

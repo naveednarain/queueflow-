@@ -75,7 +75,9 @@ create table tokens (
   created_at timestamptz default now(),
   called_at timestamptz,
   started_at timestamptz,
-  completed_at timestamptz
+  completed_at timestamptz,
+  -- Guarantee uniqueness: no two tokens can share the same number within the same service
+  unique (service_id, token_number)
 );
 
 create table notifications (
